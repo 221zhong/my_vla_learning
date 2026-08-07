@@ -2,6 +2,12 @@
 
 面向机器人视觉—语言—动作模型（Vision-Language-Action, VLA）的个人学习与研究资料库，当前重点覆盖开放机器人数据集选型、VLA技术演化，以及面向Franka机械臂的动作建模路线。
 
+## 在线网站
+
+**[打开 My VLA Learning 网站](https://221zhong.github.io/my_vla_learning/)**
+
+网站首页可直接进入两份HTML报告；每次推送到`main`分支后，GitHub Actions会自动重新部署。
+
 ## 内容导航
 
 ### 1. 开放机器人数据集综述
