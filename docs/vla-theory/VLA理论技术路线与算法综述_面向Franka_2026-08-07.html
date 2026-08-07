@@ -1,0 +1,804 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VLA理论技术路线与算法综述：面向Franka通用操作策略</title>
+  <script>window.MathJax={tex:{inlineMath:[["\\(","\\)"],["$","$"]],displayMath:[["\\[","\\]"]],processEscapes:true},svg:{fontCache:"global"}};</script>
+  <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+  <style>
+    :root { color-scheme: light; --ink:#172033; --muted:#5d6879; --line:#d8dee9; --accent:#175cd3; --panel:#f6f8fb; }
+    * { box-sizing:border-box; }
+    html { scroll-behavior:smooth; }
+    body { margin:0; color:var(--ink); background:#eef2f7; font:16px/1.72 system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif; }
+    main { width:min(1180px,calc(100% - 32px)); margin:24px auto; padding:44px 54px 72px; background:white; border:1px solid var(--line); border-radius:14px; box-shadow:0 12px 35px rgba(23,32,51,.08); }
+    h1 { margin-top:0; font-size:2rem; line-height:1.3; }
+    h2 { margin-top:2.2em; padding-bottom:.35em; border-bottom:1px solid var(--line); }
+    h3 { margin-top:1.8em; }
+    .anchor { margin-left:.4em; color:#aab3c2; text-decoration:none; opacity:0; }
+    h1:hover .anchor,h2:hover .anchor,h3:hover .anchor { opacity:1; }
+    a { color:var(--accent); }
+    img { display:block; max-width:100%; height:auto; margin:24px auto; border-radius:8px; }
+    table { display:block; width:100%; overflow-x:auto; border-collapse:collapse; margin:18px 0 28px; font-size:.92rem; }
+    th,td { min-width:120px; padding:9px 11px; border:1px solid var(--line); vertical-align:top; text-align:left; }
+    th { background:#edf3fb; }
+    tr:nth-child(even) td { background:#fafbfd; }
+    code { padding:.12em .34em; border-radius:4px; background:#edf1f6; font:85%/1.5 Consolas,"Cascadia Code",monospace; }
+    pre { overflow:auto; padding:18px 20px; border:1px solid #283449; border-radius:9px; color:#e6edf7; background:#111827; line-height:1.52; }
+    pre code { padding:0; color:inherit; background:transparent; }
+    blockquote { margin:18px 0; padding:10px 18px; color:#445066; background:#f3f7fd; border-left:4px solid var(--accent); }
+    .math-display { overflow-x:auto; margin:1.2em 0; padding:.2em 0; text-align:center; }
+    .math-inline { white-space:nowrap; }
+    .toc { margin:28px 0 40px; padding:20px 24px; border:1px solid var(--line); border-radius:10px; background:var(--panel); }
+    .toc h2 { margin:0 0 10px; border:0; font-size:1.25rem; }
+    .toc ul { columns:2; padding-left:22px; }
+    .toc li { break-inside:avoid; margin:.25em 0; }
+    .toc-level-3 { margin-left:1em!important; font-size:.92em; }
+    @media (max-width:760px) { main { width:100%; margin:0; padding:28px 18px 50px; border:0; border-radius:0; } .toc ul { columns:1; } }
+    @media print { body { background:white; } main { width:100%; margin:0; padding:0; border:0; box-shadow:none; } .toc { break-after:page; } a { color:inherit; text-decoration:none; } }
+  </style>
+</head>
+<body>
+<main>
+<nav class="toc"><h2>目录</h2><ul><li class="toc-level-1"><a href="#vla理论技术路线与算法综述-面向franka通用操作策略">VLA理论技术路线与算法综述：面向Franka通用操作策略</a></li><li class="toc-level-2"><a href="#摘要">摘要</a></li><li class="toc-level-2"><a href="#1-vla要解决的理论问题">1. VLA要解决的理论问题</a></li><li class="toc-level-3"><a href="#1-1-从识别模型到具身策略">1.1 从识别模型到具身策略</a></li><li class="toc-level-3"><a href="#1-2-三个时间尺度">1.2 三个时间尺度</a></li><li class="toc-level-3"><a href="#1-3-vla的演化路线">1.3 VLA的演化路线</a></li><li class="toc-level-2"><a href="#2-vla的统一模型组成">2. VLA的统一模型组成</a></li><li class="toc-level-3"><a href="#2-1-视觉编码">2.1 视觉编码</a></li><li class="toc-level-3"><a href="#2-2-语言条件">2.2 语言条件</a></li><li class="toc-level-3"><a href="#2-3-本体状态">2.3 本体状态</a></li><li class="toc-level-3"><a href="#2-4-多模态transformer">2.4 多模态Transformer</a></li><li class="toc-level-2"><a href="#3-动作空间-vla最关键的接口">3. 动作空间：VLA最关键的接口</a></li><li class="toc-level-3"><a href="#3-1-关节动作与末端动作">3.1 关节动作与末端动作</a></li><li class="toc-level-3"><a href="#3-2-绝对-逐步相对与chunk内相对">3.2 绝对、逐步相对与chunk内相对</a></li><li class="toc-level-3"><a href="#3-3-旋转表示">3.3 旋转表示</a></li><li class="toc-level-2"><a href="#4-action-chunk-从逐步反应到短时运动计划">4. Action Chunk：从逐步反应到短时运动计划</a></li><li class="toc-level-3"><a href="#4-1-定义">4.1 定义</a></li><li class="toc-level-3"><a href="#4-2-为什么action-chunk有效">4.2 为什么action chunk有效</a></li><li class="toc-level-3"><a href="#4-3-重叠chunk与时间集成">4.3 重叠chunk与时间集成</a></li><li class="toc-level-2"><a href="#5-vla的三类动作生成算法">5. VLA的三类动作生成算法</a></li><li class="toc-level-3"><a href="#5-1-自回归离散动作token">5.1 自回归离散动作token</a></li><li class="toc-level-3"><a href="#5-2-直接连续回归">5.2 直接连续回归</a></li><li class="toc-level-3"><a href="#5-3-扩散与flow-matching">5.3 扩散与flow matching</a></li><li class="toc-level-2"><a href="#6-fast-把连续动作序列变成高效token">6. FAST：把连续动作序列变成高效token</a></li><li class="toc-level-2"><a href="#7-vq-vae-rvq与actioncodec">7. VQ-VAE、RVQ与ActionCodec</a></li><li class="toc-level-3"><a href="#7-1-从连续动作到离散码">7.1 从连续动作到离散码</a></li><li class="toc-level-3"><a href="#7-2-rvq-逐层量化残差">7.2 RVQ：逐层量化残差</a></li><li class="toc-level-3"><a href="#7-3-actioncodec-为vla优化的学习式动作tokenizer">7.3 ActionCodec：为VLA优化的学习式动作tokenizer</a></li><li class="toc-level-3"><a href="#7-4-fast与actioncodec的本质区别">7.4 FAST与ActionCodec的本质区别</a></li><li class="toc-level-2"><a href="#8-action-expert与π0-π0-5">8. Action Expert与π0/π0.5</a></li><li class="toc-level-3"><a href="#8-1-action-expert是什么">8.1 Action Expert是什么</a></li><li class="toc-level-3"><a href="#8-2-action-expert如何训练">8.2 Action Expert如何训练</a></li><li class="toc-level-3"><a href="#8-3-π0-5的训练逻辑">8.3 π0.5的训练逻辑</a></li><li class="toc-level-3"><a href="#8-4-高层subtask如何参与推理">8.4 高层subtask如何参与推理</a></li><li class="toc-level-3"><a href="#8-5-π0-5如何生成action-chunk">8.5 π0.5如何生成action chunk</a></li><li class="toc-level-3"><a href="#8-6-π0-5与-知识绝缘-问题">8.6 π0.5与“知识绝缘”问题</a></li><li class="toc-level-2"><a href="#9-g0-5-统一自回归推理与动作">9. G0.5：统一自回归推理与动作</a></li><li class="toc-level-3"><a href="#9-1-vlm-as-encoder与vlm-as-actor">9.1 VLM-as-Encoder与VLM-as-Actor</a></li><li class="toc-level-3"><a href="#9-2-跨本体动作空间与视觉记忆">9.2 跨本体动作空间与视觉记忆</a></li><li class="toc-level-3"><a href="#9-3-训练数据与监督结构">9.3 训练数据与监督结构</a></li><li class="toc-level-3"><a href="#9-4-对franka的启示">9.4 对Franka的启示</a></li><li class="toc-level-2"><a href="#10-多任务-skill与层级学习">10. 多任务、skill与层级学习</a></li><li class="toc-level-3"><a href="#10-1-任务标签-不等于-skill">10.1 “任务标签”不等于“skill”</a></li><li class="toc-level-3"><a href="#10-2-层级行为克隆">10.2 层级行为克隆</a></li><li class="toc-level-3"><a href="#10-3-隐式与显式层级的权衡">10.3 隐式与显式层级的权衡</a></li><li class="toc-level-2"><a href="#11-跨数据集与跨本体学习">11. 跨数据集与跨本体学习</a></li><li class="toc-level-3"><a href="#11-1-为什么需要跨本体">11.1 为什么需要跨本体</a></li><li class="toc-level-3"><a href="#11-2-统一action-space的两种路线">11.2 统一action space的两种路线</a></li><li class="toc-level-3"><a href="#11-3-数据混合不是均匀采样">11.3 数据混合不是均匀采样</a></li><li class="toc-level-2"><a href="#12-行为克隆的局限及改进方向">12. 行为克隆的局限及改进方向</a></li><li class="toc-level-3"><a href="#12-1-分布偏移">12.1 分布偏移</a></li><li class="toc-level-3"><a href="#12-2-多模态动作">12.2 多模态动作</a></li><li class="toc-level-3"><a href="#12-3-长任务中的错误类型">12.3 长任务中的错误类型</a></li><li class="toc-level-2"><a href="#13-主要vla路线比较">13. 主要VLA路线比较</a></li><li class="toc-level-2"><a href="#14-面向franka的理论技术路线">14. 面向Franka的理论技术路线</a></li><li class="toc-level-2"><a href="#15-可形成论文工作的研究问题">15. 可形成论文工作的研究问题</a></li><li class="toc-level-3"><a href="#15-1-状态感知的动作生成">15.1 状态感知的动作生成</a></li><li class="toc-level-3"><a href="#15-2-skill一致性与跨场景复用">15.2 Skill一致性与跨场景复用</a></li><li class="toc-level-3"><a href="#15-3-chunk视野与闭环频率">15.3 Chunk视野与闭环频率</a></li><li class="toc-level-3"><a href="#15-4-离散预训练与连续后训练">15.4 离散预训练与连续后训练</a></li><li class="toc-level-3"><a href="#15-5-跨本体数据的有效边界">15.5 跨本体数据的有效边界</a></li><li class="toc-level-2"><a href="#16-结论">16. 结论</a></li><li class="toc-level-2"><a href="#参考资料">参考资料</a></li><li class="toc-level-3"><a href="#证据与边界说明">证据与边界说明</a></li></ul></nav>
+<h1 id="vla理论技术路线与算法综述-面向franka通用操作策略">VLA理论技术路线与算法综述：面向Franka通用操作策略<a class="anchor" href="#vla理论技术路线与算法综述-面向franka通用操作策略">#</a></h1>
+<p><strong>整理日期：2026-08-07</strong><br />
+<strong>范围：理论模型、学习目标与算法路线；不涉及环境安装、数据下载、ROS接口或实机部署命令。</strong></p>
+<h2 id="摘要">摘要<a class="anchor" href="#摘要">#</a></h2>
+<p>视觉—语言—动作模型（Vision-Language-Action Model, VLA）的目标，是把互联网视觉语言知识、机器人示范数据和连续控制统一到一个条件策略中。对Franka机械臂而言，核心问题不是简单地“让大模型输出七个数”，而是建立从语义任务、空间grounding、本体状态到可执行动作块的闭环映射。当前动作生成主要形成四条互补路线：RT-1、RT-2和OpenVLA式离散动作token，ACT式直接action chunk回归，Diffusion Policy与π0/π0.5式连续生成，以及FAST、ActionCodec和G0.5推动的高压缩自回归动作建模。它们的核心分歧是：VLM只作为视觉语言条件编码器，还是直接作为生成推理与动作的actor。</p>
+<p>本文从理论层面对VLA的演化、动作空间、action chunk、行为克隆、扩散、flow matching、Action Expert训练、FAST频域token化、VQ-VAE/RVQ与ActionCodec、π0/π0.5及G0.5架构、跨本体预训练和评测边界进行系统梳理。面向Franka，推荐把“语义理解—动作表示—连续控制”视为可替换的三层接口：VLM承担开放词汇感知与subtask建模；FAST或ActionCodec用于离散动作预训练和表示学习；连续Action Expert或ActionCodec解码器负责输出可执行动作块；滚动时域控制则负责闭环纠错。具体选型应通过同数据、同算力、同控制栈的消融实验决定，而不能仅凭公开榜单。</p>
+<h2 id="1-vla要解决的理论问题">1. VLA要解决的理论问题<a class="anchor" href="#1-vla要解决的理论问题">#</a></h2>
+<h3 id="1-1-从识别模型到具身策略">1.1 从识别模型到具身策略<a class="anchor" href="#1-1-从识别模型到具身策略">#</a></h3>
+<p>传统视觉语言模型学习的是图像和文本之间的统计关系，例如描述场景、定位物体或回答问题。机器人策略还必须回答第三个问题：在当前物理状态下，下一步应如何改变机器人与环境。因而VLA可抽象为条件策略</p>
+<div class="math-display">\[
+\pi_\theta(a_{t:t+H}\mid I_{t-k:t}^{1:V},\,q_{t-k:t},\,\ell),
+\]</div>
+<p>其中，<span class="math-inline">\(I^{1:V}\)</span>表示一个或多个相机视角，<span class="math-inline">\(q\)</span>表示机器人本体状态，<span class="math-inline">\(\ell\)</span>是语言指令，<span class="math-inline">\(a_{t:t+H}\)</span>是从当前时刻开始的未来动作块，<span class="math-inline">\(H\)</span>为动作视野长度。与纯VLM相比，VLA额外面临四个约束：</p>
+<ol>
+<li><strong>动作必须落在具体本体的控制空间中。</strong> 同一句“拿起杯子”在Franka、双臂机器人和移动操作机器人上的动作维度并不相同。</li>
+<li><strong>动作是连续时间序列。</strong> 单步正确不等于轨迹平滑，也不保证长任务成功。</li>
+<li><strong>预测会改变下一时刻的输入分布。</strong> 策略执行自己的动作后进入新状态，错误会在闭环中累积。</li>
+<li><strong>物理任务具有多模态性。</strong> 同一任务可能存在多种抓法、接近方向和关节构型，简单均方误差容易平均掉不同策略。</li>
+</ol>
+<p>因此，VLA的本质是“具有视觉语言先验的条件时序策略”，而不只是把LLM输出层替换成机器人动作层。</p>
+<h3 id="1-2-三个时间尺度">1.2 三个时间尺度<a class="anchor" href="#1-2-三个时间尺度">#</a></h3>
+<p>通用操作任务通常同时包含三个时间尺度：</p>
+<ul>
+<li><strong>任务尺度</strong>：数十秒到数分钟，例如“把桌上的餐具都放入水槽”。</li>
+<li><strong>skill/subtask尺度</strong>：数秒，例如<code>reach</code>、<code>pick_up</code>、<code>open_drawer</code>、<code>place</code>。</li>
+<li><strong>控制尺度</strong>：几十毫秒到数百毫秒，例如末端平移、旋转和夹爪开合。</li>
+</ul>
+<p>单一逐步策略需要同时处理长期语义依赖和高频运动细节，学习难度很高。层级VLA把任务分解为</p>
+<div class="math-display">\[
+\ell_{\mathrm{task}}
+\rightarrow z_t^{\mathrm{subtask}}
+\rightarrow a_{t:t+H},
+\]</div>
+<p>其中高层变量<span class="math-inline">\(z_t^{\mathrm{subtask}}\)</span>表示当前原子技能或短时目标，低层策略根据图像、状态和该子任务生成动作块。π0.5正是这一理论路线的重要实例。</p>
+<h3 id="1-3-vla的演化路线">1.3 VLA的演化路线<a class="anchor" href="#1-3-vla的演化路线">#</a></h3>
+<p>VLA并非突然出现，而是机器人模仿学习、通用序列模型、视觉语言预训练和生成式连续控制逐步汇合的结果。其演化可以分为七个阶段；这些阶段是问题重心的迁移，并不意味着旧路线已经被完全替代。</p>
+<h4 id="阶段一-任务专用策略-从感知直接回归动作">阶段一：任务专用策略——从感知直接回归动作<a class="anchor" href="#阶段一-任务专用策略-从感知直接回归动作">#</a></h4>
+<p>早期端到端机器人学习通常针对单一任务训练策略：输入图像或低维状态，输出单步关节/末端动作。常见算法包括行为克隆、强化学习、CNN-MLP策略和RNN时序策略。这一阶段建立了</p>
+<div class="math-display">\[
+o_t\rightarrow a_t
+\]</div>
+<p>的基本范式，但每个任务往往需要独立数据和独立模型。它解决了“手工编程每个动作”的问题，却没有解决语言泛化、任务复用和跨场景迁移。</p>
+<h4 id="阶段二-多任务transformer与通用序列建模">阶段二：多任务Transformer与通用序列建模<a class="anchor" href="#阶段二-多任务transformer与通用序列建模">#</a></h4>
+<p>Transformer使不同任务、模态和动作都能被表示为序列。Gato展示了同一个网络可以根据上下文处理文本、图像、游戏动作和真实机器人控制，提出“统一token序列＋统一模型权重”的通用智能体思路。<a href="https://arxiv.org/abs/2205.06175">Gato论文</a></p>
+<p>RT-1进一步把这一思路聚焦到真实机器人操作：图像和语言经过Transformer融合，机器人动作被离散化，模型在大规模多任务示范上训练。<a href="https://arxiv.org/abs/2212.06817">RT-1论文</a> 这一阶段的关键进步是从“一个任务一个策略”转向“一个模型吸收多任务数据”，但知识仍主要来自机器人示范，开放世界语义能力有限。</p>
+<h4 id="阶段三-llm-vlm进入机器人-语义规划与具身grounding">阶段三：LLM/VLM进入机器人——语义规划与具身grounding<a class="anchor" href="#阶段三-llm-vlm进入机器人-语义规划与具身grounding">#</a></h4>
+<p>SayCan并不直接让LLM生成低层连续动作，而是让LLM在预定义skill之间做高层选择，再用价值函数或affordance评估当前机器人是否能执行该skill：</p>
+<div class="math-display">\[
+\operatorname{score}(z)=
+p_{LM}(z\mid\ell,\text{history})
+\cdot V(z\mid o).
+\]</div>
+<p>它的重要贡献是明确区分“语言上合理”和“物理上可执行”。<a href="https://arxiv.org/abs/2204.01691">SayCan论文</a></p>
+<p>PaLM-E则把图像和连续传感输入直接嵌入语言模型，证明互联网语言、视觉问答和机器人任务的联合训练可以产生正迁移。<a href="https://arxiv.org/abs/2303.03378">PaLM-E论文</a> 这一时期形成两条互补路线：模块化系统用LLM做高层规划、专用策略执行skill；端到端模型把具身观测直接送入大模型。前者可解释但受限于skill库，后者更通用但控制grounding更难。</p>
+<h4 id="阶段四-真正的vla-把动作纳入语言模型输出空间">阶段四：真正的VLA——把动作纳入语言模型输出空间<a class="anchor" href="#阶段四-真正的vla-把动作纳入语言模型输出空间">#</a></h4>
+<p>RT-2通过把动作表示成文本token，并联合训练互联网视觉语言任务和机器人轨迹，正式强化了Vision-Language-Action这一范式。模型不仅学习“图像＋语言→动作”，还尝试把网络预训练形成的物体语义、符号理解和简单推理迁移到控制。<a href="https://arxiv.org/abs/2307.15818">RT-2论文</a></p>
+<p>OpenVLA随后提供开放的7B VLA，在Open X-Embodiment等大规模真实机器人数据上训练，推动VLA从封闭系统走向可复现研究。<a href="https://arxiv.org/abs/2406.09246">OpenVLA论文</a> 这一阶段的基本公式是</p>
+<div class="math-display">\[
+(I,\ell)\rightarrow \text{action tokens},
+\]</div>
+<p>主要优势是完整复用VLM的自回归训练范式；核心瓶颈则变成动作量化误差、输出序列长度和高频推理速度。</p>
+<h4 id="阶段五-跨本体开放策略-从单平台数据扩大到机器人互联网">阶段五：跨本体开放策略——从单平台数据扩大到机器人互联网<a class="anchor" href="#阶段五-跨本体开放策略-从单平台数据扩大到机器人互联网">#</a></h4>
+<p>Open X-Embodiment把不同机构、机器人和任务转换为RLDS容器，为跨本体预训练提供数据基础。Octo在约800k OXE轨迹上训练通用策略，并强调对新观测和动作空间的快速适配。<a href="https://arxiv.org/abs/2405.12213">Octo论文</a></p>
+<p>此阶段的研究问题从“能否联合多任务”演化为“不同本体的数据究竟共享什么”。视觉语义可以高度共享，相对末端动作可以部分共享，而关节动作和末端执行器则高度本体相关。数据格式统一并未自动解决动作语义统一，因此embodiment conditioning、动作mask、专用action head和统一末端空间成为关键机制。</p>
+<h4 id="阶段六-action-chunk与生成式连续控制">阶段六：Action Chunk与生成式连续控制<a class="anchor" href="#阶段六-action-chunk与生成式连续控制">#</a></h4>
+<p>ACT表明，策略一次预测未来一段动作并配合时间集成，可以比逐步独立预测更好地表达短时运动结构。Diffusion Policy进一步把动作块建模为条件生成分布，解决多种正确轨迹被均值回归抹平的问题。</p>
+<p>π0把预训练VLM与flow-matching Action Expert结合，使语义主干能够条件化高频连续动作块；FAST又通过时间频率压缩提升离散动作预训练效率。π0.5把异构共训练、高层subtask预测与连续动作生成结合起来，并在后续知识绝缘路线中进一步联合FAST token表示学习与连续Action Expert。</p>
+<h4 id="阶段七-统一自回归推理与动作">阶段七：统一自回归推理与动作<a class="anchor" href="#阶段七-统一自回归推理与动作">#</a></h4>
+<p>2025—2026年的研究重新检验“VLM是否必须只做encoder”。FAST、FASTer和ActionCodec改善了动作token的压缩率、重建精度与时间一致性，使VLM直接生成高频动作序列重新变得可行。G0.5进一步将<code>Subtask</code>、<code>BBox</code>、<code>Trace</code>、<code>ActionHint</code>和结构化ActionCodec token放入同一自回归流：动作token能够直接注意先前生成的具身推理，而不是只读取一个压缩的VLM隐藏状态。<a href="https://opengalaxea.github.io/G05/Galaxea_G0_5.pdf">G0.5技术报告</a></p>
+<p>这一路线并未消除连续动作生成：G0.5仍可附加flow-matching head用于连续动作细化或延迟敏感场景。因此最新趋势更接近“统一语义接口＋多种动作解码器”，而不是离散token与连续生成之间的简单二选一。</p>
+<h4 id="演化的核心矛盾">演化的核心矛盾<a class="anchor" href="#演化的核心矛盾">#</a></h4>
+<table>
+<thead>
+<tr>
+  <th>演化阶段</th>
+  <th>解决的旧问题</th>
+  <th>新出现的主要瓶颈</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>单任务行为克隆</td>
+  <td>从示范直接学习控制</td>
+  <td>每个任务重训、泛化弱、误差累积</td>
+</tr>
+<tr>
+  <td>多任务Transformer</td>
+  <td>一个模型吸收多任务数据</td>
+  <td>缺少开放语义、动作token效率低</td>
+</tr>
+<tr>
+  <td>LLM/VLM具身化</td>
+  <td>引入互联网知识和语言规划</td>
+  <td>语言合理不等于物理可执行</td>
+</tr>
+<tr>
+  <td>RT-2/OpenVLA式VLA</td>
+  <td>统一视觉、语言与动作token</td>
+  <td>连续动作量化、延迟和精度矛盾</td>
+</tr>
+<tr>
+  <td>OXE/Octo跨本体</td>
+  <td>扩大机器人数据规模和多样性</td>
+  <td>动作空间、频率和本体差异</td>
+</tr>
+<tr>
+  <td>π0/π0.5连续层级VLA</td>
+  <td>连续chunk、长任务分解、跨本体预训练</td>
+  <td>训练配方复杂、数据质量和标注成本高</td>
+</tr>
+<tr>
+  <td>FAST/ActionCodec/G0.5统一AR</td>
+  <td>推理与动作处于同一token流</td>
+  <td>tokenizer压缩损失、AR延迟和物理安全边界</td>
+</tr>
+</tbody>
+</table>
+<p>因此，VLA的演化不是简单的参数规模增长，而是沿着四条轴同时推进：</p>
+<pre><code class="language-text">任务范围：单任务 → 多任务 → 开放世界长任务
+知识来源：机器人示范 → 跨本体数据 → 互联网视觉语言知识
+动作建模：单步回归 → 离散token → action chunk → 连续生成分布
+系统层级：端到端反应 → LLM规划+skill → VLM+Action Expert → 统一推理与动作token流
+</code></pre>
+<p>未来路线很可能继续融合而非二选一：语义层保持token化和自回归推理，动作层使用连续并行生成；通用主干共享世界知识，本体专家保留动力学差异；高层生成可解释subtask，低层通过闭环action chunk完成接触控制。</p>
+<h2 id="2-vla的统一模型组成">2. VLA的统一模型组成<a class="anchor" href="#2-vla的统一模型组成">#</a></h2>
+<h3 id="2-1-视觉编码">2.1 视觉编码<a class="anchor" href="#2-1-视觉编码">#</a></h3>
+<p>视觉编码器把图像划分为patch并映射成视觉token。预训练视觉表征通常具有两种互补能力：一类强调语义与语言对齐，另一类强调局部结构和几何细节。OpenVLA将SigLIP与DINOv2特征结合，体现了“语义对齐＋空间细节”共同服务控制的思路。<a href="https://arxiv.org/abs/2406.09246">OpenVLA论文</a></p>
+<p>多相机输入不是简单增加图片数量。外部相机更适合表达物体关系和全局可达性，腕部相机更适合表达接触区域和局部遮挡。理论上可采用：</p>
+<ul>
+<li>将每个视角独立编码后拼接；</li>
+<li>给不同视角添加camera embedding；</li>
+<li>用cross-attention让任务token选择相关视角；</li>
+<li>先在每个视角内压缩，再进行跨视角融合。</li>
+</ul>
+<p>如果模型不知道相机身份，两个内容相似但坐标含义不同的图像token可能被错误混合。因此通用VLA应显式保留视角角色，而不是只依赖图像内容自行猜测。</p>
+<h3 id="2-2-语言条件">2.2 语言条件<a class="anchor" href="#2-2-语言条件">#</a></h3>
+<p>语言指令提供任务目标，但语言可以处于不同抽象层次：</p>
+<pre><code class="language-text">高层任务：把桌面整理干净
+中层子任务：把红杯子放入箱子
+原子skill：approach → grasp → lift → transport → release
+</code></pre>
+<p>语言的作用包括：选择目标物体、约束目标位置、区分视觉上相同但意图不同的行为，以及向低层策略提供阶段信息。RT-2证明了将机器人动作与网络视觉语言任务共同训练，可以把部分互联网语义知识迁移到机器人控制，例如处理未在机器人数据中直接出现的语义指令。<a href="https://arxiv.org/abs/2307.15818">RT-2论文</a></p>
+<h3 id="2-3-本体状态">2.3 本体状态<a class="anchor" href="#2-3-本体状态">#</a></h3>
+<p>仅从图像预测动作会产生部分可观测问题。Franka的同一视觉画面可能对应不同关节构型、夹爪宽度或接触状态，因此策略通常还应条件化于</p>
+<div class="math-display">\[
+q_t=[q_t^{1:7},\dot q_t^{1:7},x_t^{eef},R_t^{eef},g_t].
+\]</div>
+<p>状态进入Transformer主要有三种方式：</p>
+<ol>
+<li>数值离散后转成文本token；</li>
+<li>使用专用离散state token；</li>
+<li>通过线性层或小型MLP将连续状态映射成soft token。</li>
+</ol>
+<p>连续投影保留精度且避免数值文本膨胀，但跨本体时需要处理不同维度。离散token更容易复用语言建模接口，却会引入量化误差。状态表征应被视为动作生成的重要条件，而非可有可无的辅助信息。</p>
+<h3 id="2-4-多模态transformer">2.4 多模态Transformer<a class="anchor" href="#2-4-多模态transformer">#</a></h3>
+<p>视觉token、文本token和状态token进入Transformer后通过注意力交互。其作用不是简单特征拼接，而是形成任务相关的条件表示：语言token关注目标物体，视觉token提供场景证据，状态token限定当前可执行动作。设所有输入嵌入为<span class="math-inline">\(X\in\mathbb{R}^{n\times d}\)</span>，标准注意力为</p>
+<div class="math-display">\[
+\operatorname{Attn}(X)=operatorname{softmax}
+\left(\frac{XW_Q(XW_K)^\top}{\sqrt{d_k}}\right)XW_V.
+\]</div>
+<p>动作可由同一个自回归Transformer输出，也可由独立action head或action expert读取共享上下文后生成。后者能够把语义理解参数与高频动作建模参数部分解耦。</p>
+<h2 id="3-动作空间-vla最关键的接口">3. 动作空间：VLA最关键的接口<a class="anchor" href="#3-动作空间-vla最关键的接口">#</a></h2>
+<h3 id="3-1-关节动作与末端动作">3.1 关节动作与末端动作<a class="anchor" href="#3-1-关节动作与末端动作">#</a></h3>
+<p>对Franka，常见动作空间包括：</p>
+<div class="math-display">\[
+a_t^{joint}=[q_{target}^{1:7},g],\qquad
+a_t^{vel}=[\dot q^{1:7},g],
+\]</div>
+<p>或</p>
+<div class="math-display">\[
+a_t^{eef}=[\Delta x,\Delta y,\Delta z,
+\Delta r_x,\Delta r_y,\Delta r_z,g].
+\]</div>
+<p>关节动作最接近具体本体，能够控制冗余构型，但跨机器人迁移较弱。相对末端动作把技能表达为局部几何变化，对不同机械臂更通用，却需要逆运动学或下层控制器解决Franka七自由度冗余、关节限位和奇异性。</p>
+<p>面向跨数据集预训练，理论上更适合统一到相对末端空间；面向Franka专用精细控制，关节状态仍应作为条件输入，必要时增加null-space或关节目标分支。</p>
+<h3 id="3-2-绝对-逐步相对与chunk内相对">3.2 绝对、逐步相对与chunk内相对<a class="anchor" href="#3-2-绝对-逐步相对与chunk内相对">#</a></h3>
+<ul>
+<li><strong>绝对动作</strong>直接给出基座或世界坐标中的目标。其优点是误差不必逐步积分，缺点是强依赖标定和机器人安装位置。</li>
+<li><strong>逐步相对动作</strong>描述相对当前状态的变化，跨场景平移更自然，但长轨迹容易积累漂移。</li>
+<li><strong>chunk内相对动作</strong>以chunk起点或当前观测为参考，一次预测整段轨迹。它兼顾局部不变性和短时轨迹一致性，但必须固定参考系定义。</li>
+</ul>
+<p>这三类动作不能只靠统一shape直接混合。真正的统一变量至少应包含控制空间、参考坐标系、旋转编码、单位、频率和夹爪方向。</p>
+<h3 id="3-3-旋转表示">3.3 旋转表示<a class="anchor" href="#3-3-旋转表示">#</a></h3>
+<p>欧拉角紧凑但存在顺序歧义和奇异性；四元数连续且适合表示状态，但有<span class="math-inline">\(q\)</span>与<span class="math-inline">\(-q\)</span>等价问题；axis-angle适合表达局部旋转增量；6D rotation representation适合神经网络回归但需要再投影到旋转矩阵。对相对末端action，常见选择是三维axis-angle；对当前末端state，常见选择是单位四元数。</p>
+<h2 id="4-action-chunk-从逐步反应到短时运动计划">4. Action Chunk：从逐步反应到短时运动计划<a class="anchor" href="#4-action-chunk-从逐步反应到短时运动计划">#</a></h2>
+<h3 id="4-1-定义">4.1 定义<a class="anchor" href="#4-1-定义">#</a></h3>
+<p>action chunk是模型在时刻<span class="math-inline">\(t\)</span>一次预测未来<span class="math-inline">\(H\)</span>步动作：</p>
+<div class="math-display">\[
+A_t=(a_t,a_{t+1},\ldots,a_{t+H-1})\in\mathbb{R}^{H\times d_a}.
+\]</div>
+<p>它不是一种固定的数据文件格式，而是由训练采样器从逐帧轨迹中切出的监督目标。给定episode动作矩阵<span class="math-inline">\(A\in\mathbb{R}^{T\times d_a}\)</span>，训练样本可通过滑动窗口生成：</p>
+<div class="math-display">\[
+(o_t,\ell,q_t)\mapsto A[t:t+H].
+\]</div>
+<p>轨迹尾部不足<span class="math-inline">\(H\)</span>步时需要padding mask，避免填充值进入损失。</p>
+<h3 id="4-2-为什么action-chunk有效">4.2 为什么action chunk有效<a class="anchor" href="#4-2-为什么action-chunk有效">#</a></h3>
+<p>第一，chunk保留了动作之间的相关性。抓取不是一组互不相关的单步增量，而是接近、闭合、抬升构成的局部轨迹。第二，chunk降低了有效决策频率，减少每一步噪声导致的抖动。第三，一次输出多步动作能够摊薄大模型推理成本。第四，它可以表达多模态短时策略，例如从物体左侧或右侧接近。</p>
+<p>其代价是开环风险：如果完整执行较长chunk，环境变化后策略不能及时修正。因此实践上通常采用滚动时域思想：预测<span class="math-inline">\(H\)</span>步，只执行前<span class="math-inline">\(h\le H\)</span>步，然后用新观测重新预测。</p>
+<h3 id="4-3-重叠chunk与时间集成">4.3 重叠chunk与时间集成<a class="anchor" href="#4-3-重叠chunk与时间集成">#</a></h3>
+<p>若每个时刻都重新预测chunk，同一个未来时刻会收到来自多个历史观测的动作预测。可以只采用最新预测，也可以进行指数加权时间集成：</p>
+<div class="math-display">\[
+\hat a_t=\frac{\sum_{i=0}^{m}w_i\hat a_t^{(t-i)}}
+{\sum_{i=0}^{m}w_i},\qquad w_i=\exp(-\lambda i).
+\]</div>
+<p>较新的预测反映最新环境，较旧预测提供平滑先验。时间集成能减少抖动，但在突然接触或目标移动时也可能引入滞后。因此<span class="math-inline">\(H\)</span>、执行长度<span class="math-inline">\(h\)</span>和融合系数不是独立超参数，而是在平滑性、响应速度和推理成本之间共同权衡。</p>
+<h2 id="5-vla的三类动作生成算法">5. VLA的三类动作生成算法<a class="anchor" href="#5-vla的三类动作生成算法">#</a></h2>
+<h3 id="5-1-自回归离散动作token">5.1 自回归离散动作token<a class="anchor" href="#5-1-自回归离散动作token">#</a></h3>
+<p>RT-2和OpenVLA把连续动作量化成离散token，使机器人学习变成与语言模型相似的next-token prediction：</p>
+<div class="math-display">\[
+\mathcal L_{AR}=-\sum_{j=1}^{L}
+\log p_\theta(y_j\mid y_{&lt;j},I,q,\ell).
+\]</div>
+<p>优点是可以直接复用成熟VLM架构、交叉熵训练和高效微调工具；动作和文字进入同一符号空间，也有利于网络语义知识迁移。缺点是量化造成精度损失，逐维逐时间步token化会产生很长的输出序列，自回归解码延迟随token数增长。</p>
+<p>OpenVLA是这一方向的开放代表：模型约7B参数，以Llama 2为语言主干，融合DINOv2和SigLIP视觉特征，并在约970k真实机器人示范上训练。<a href="https://arxiv.org/abs/2406.09246">OpenVLA论文</a></p>
+<h3 id="5-2-直接连续回归">5.2 直接连续回归<a class="anchor" href="#5-2-直接连续回归">#</a></h3>
+<p>最简单的连续策略使用MLP或Transformer一次输出<span class="math-inline">\(H\times d_a\)</span>个动作，并最小化L1/L2损失：</p>
+<div class="math-display">\[
+\mathcal L_{reg}=\|A-\hat A_\theta(I,q,\ell)\|_1.
+\]</div>
+<p>ACT将action chunk与条件Transformer结合，证明一次预测未来动作序列可以有效学习精细双手操作。直接回归推理快、实现清晰，但单峰回归难以表示多种都合理的动作模式；在多模态数据上，均值解可能对应任何真实模式都不存在的动作。</p>
+<h3 id="5-3-扩散与flow-matching">5.3 扩散与flow matching<a class="anchor" href="#5-3-扩散与flow-matching">#</a></h3>
+<p>扩散策略和flow matching都不是预测单一条件均值，而是学习完整的条件动作分布</p>
+<div class="math-display">\[
+p(A_t\mid o_t,q_t,\ell),
+\]</div>
+<p>因此可以保留“从左侧接近”与“从右侧接近”等多种合法模式。两者均可从高斯噪声产生动作块，但学习对象和数值求解方式不同。</p>
+<h4 id="5-3-1-diffusion-policy-学习逐步去噪">5.3.1 Diffusion Policy：学习逐步去噪<a class="anchor" href="#5-3-1-diffusion-policy-学习逐步去噪">#</a></h4>
+<p>给定专家动作块<span class="math-inline">\(A^0\)</span>，前向扩散在第<span class="math-inline">\(k\)</span>步构造</p>
+<div class="math-display">\[
+A^k=\sqrt{\bar\alpha_k}A^0+
+\sqrt{1-\bar\alpha_k}\epsilon,
+\qquad \epsilon\sim\mathcal N(0,I).
+\]</div>
+<p>去噪网络以图像、语言和状态为条件预测噪声：</p>
+<div class="math-display">\[
+\mathcal L_{\mathrm{diff}}=
+\mathbb E\left[
+\|\epsilon-\epsilon_\theta(A^k,k,o,q,\ell)\|_2^2
+\right].
+\]</div>
+<p>推理时从<span class="math-inline">\(A^K\sim\mathcal N(0,I)\)</span>开始，多次执行反向去噪得到<span class="math-inline">\(A^0\)</span>。Diffusion Policy将该生成过程与action chunk和滚动时域控制结合，适合多模态、高维和接触丰富的机器人动作；主要代价是多步去噪延迟。<a href="https://arxiv.org/abs/2303.04137">Diffusion Policy论文</a></p>
+<h4 id="5-3-2-flow-matching-学习连续速度场">5.3.2 Flow Matching：学习连续速度场<a class="anchor" href="#5-3-2-flow-matching-学习连续速度场">#</a></h4>
+<p>Flow matching直接学习从简单噪声分布到数据分布的连续向量场。设真实动作块为<span class="math-inline">\(A\)</span>，噪声为<span class="math-inline">\(\epsilon\sim\mathcal N(0,I)\)</span>，采用线性路径</p>
+<div class="math-display">\[
+A^\tau=\tau A+(1-\tau)\epsilon,\qquad \tau\in[0,1].
+\]</div>
+<p>其理想速度为</p>
+<div class="math-display">\[
+u(A^\tau\mid A)=\frac{dA^\tau}{d\tau}=A-\epsilon.
+\]</div>
+<p>网络通过回归速度场训练：</p>
+<div class="math-display">\[
+\mathcal L_{flow}=
+\mathbb E_{A,\epsilon,\tau}
+\left[\left\|v_\theta(A^\tau,I,q,\ell,\tau)-(A-\epsilon)\right\|_2^2\right].
+\]</div>
+<p>推理时求解ODE：</p>
+<div class="math-display">\[
+\frac{dA^\tau}{d\tau}=v_\theta(A^\tau,o,q,\ell,\tau),
+\]</div>
+<p>最简单的Euler更新为</p>
+<div class="math-display">\[
+A^{\tau+\Delta\tau}=A^\tau+
+\Delta\tau\,v_\theta(A^\tau,o,q,\ell,\tau).
+\]</div>
+<p>不同论文可能采用相反的时间方向和等价符号，因此监督写成<span class="math-inline">\(A-\epsilon\)</span>还是<span class="math-inline">\(\epsilon-A\)</span>取决于路径与积分方向。Flow Matching原理上涵盖包括扩散路径在内的多种概率路径；在VLA中常使用较直的线性或最优传输式路径，以较少积分步数生成连续动作。<a href="https://openreview.net/forum?id=PqvMRDCJT9t">Flow Matching论文</a></p>
+<h4 id="5-3-3-两者的工程区别">5.3.3 两者的工程区别<a class="anchor" href="#5-3-3-两者的工程区别">#</a></h4>
+<table>
+<thead>
+<tr>
+  <th>维度</th>
+  <th>Diffusion Policy</th>
+  <th>Flow-Matching Policy</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>主要学习对象</td>
+  <td>噪声、score或等价去噪量</td>
+  <td>概率路径上的速度场</td>
+</tr>
+<tr>
+  <td>常见生成过程</td>
+  <td>多轮反向扩散</td>
+  <td>ODE数值积分</td>
+</tr>
+<tr>
+  <td>动作表示</td>
+  <td>连续action chunk</td>
+  <td>连续action chunk</td>
+</tr>
+<tr>
+  <td>多模态能力</td>
+  <td>强</td>
+  <td>强</td>
+</tr>
+<tr>
+  <td>典型VLA位置</td>
+  <td>独立策略或动作头</td>
+  <td>π0/π0.5/GR00T式Action Expert</td>
+</tr>
+<tr>
+  <td>主要成本</td>
+  <td>多步去噪调用</td>
+  <td>多步速度场调用与VLM条件计算</td>
+</tr>
+</tbody>
+</table>
+<h2 id="6-fast-把连续动作序列变成高效token">6. FAST：把连续动作序列变成高效token<a class="anchor" href="#6-fast-把连续动作序列变成高效token">#</a></h2>
+<p>朴素方法把chunk中每一时间步、每一动作维度分别分箱。若chunk长度为<span class="math-inline">\(H\)</span>、动作维度为<span class="math-inline">\(d_a\)</span>，输出token数量与<span class="math-inline">\(H d_a\)</span>成正比，高频灵巧操作会产生很长序列。</p>
+<p>FAST（Frequency-space Action Sequence Tokenization）是固定信号变换与数据驱动压缩的组合，而不是神经网络VQ tokenizer。其编码流程为</p>
+<div class="math-display">\[
+A\xrightarrow{\mathrm{normalize}}
+\widetilde A
+\xrightarrow{\mathrm{DCT}}
+C
+\xrightarrow{\mathrm{round}(s\cdot)}
+Q
+\xrightarrow{\mathrm{flatten+BPE}}
+K.
+\]</div>
+<ol>
+<li>对每个动作维度归一化。</li>
+<li>沿时间轴执行离散余弦变换（DCT），把平滑轨迹的能量集中到少数低频系数。</li>
+<li>使用缩放系数<span class="math-inline">\(s\)</span>量化DCT系数：<span class="math-inline">\(Q_{k,d}=\operatorname{round}(sC_{k,d})\)</span>。</li>
+<li>按低频优先、动作维度交错的顺序展开整数矩阵。</li>
+<li>使用BPE把频繁出现的系数组合和连续零压缩为更少的action token。</li>
+</ol>
+<p>解码时执行BPE逆变换、反量化与IDCT：</p>
+<div class="math-display">\[
+\hat A=\operatorname{IDCT}\left(
+\frac{\operatorname{BPE}^{-1}(K)}{s}
+\right).
+\]</div>
+<p>BPE对量化后的整数序列是可逆压缩，但浮点系数量化本身有损。FAST的主要优势来自机器人轨迹的时间平滑性：与逐帧分桶相比，它用少数低频系数描述整段动作曲线。<a href="https://arxiv.org/abs/2501.09747">FAST论文</a></p>
+<p>FAST+是在约100万条真实机器人轨迹上建立的通用tokenizer，目标是在不同机器人、动作空间和控制频率之间复用。π0-FAST则用自回归FAST token替代π0的flow-matching连续动作输出。论文报告在相应训练设置中可匹配扩散式VLA性能，并最多缩短约5倍训练时间；这一数字依赖论文的数据、模型和计算协议，不能直接外推到任意Franka项目。</p>
+<p>FAST解决的是自回归训练的动作序列效率问题，并不等同于底层控制器。其输出仍须经过IDCT、反归一化、坐标变换和安全控制后才能发送给Franka。</p>
+<h2 id="7-vq-vae-rvq与actioncodec">7. VQ-VAE、RVQ与ActionCodec<a class="anchor" href="#7-vq-vae-rvq与actioncodec">#</a></h2>
+<h3 id="7-1-从连续动作到离散码">7.1 从连续动作到离散码<a class="anchor" href="#7-1-从连续动作到离散码">#</a></h3>
+<p>标准VQ-VAE先编码动作块：</p>
+<div class="math-display">\[
+z_e=E_\phi(A),
+\]</div>
+<p>再从码本<span class="math-inline">\(\mathcal C=\{e_1,\ldots,e_K\}\)</span>中选择最近向量：</p>
+<div class="math-display">\[
+k^*=\arg\min_k\|z_e-e_k\|_2^2,
+\qquad z_q=e_{k^*},
+\]</div>
+<p>最后由解码器重建连续动作：</p>
+<div class="math-display">\[
+\hat A=D_\psi(z_q).
+\]</div>
+<p>整数索引<span class="math-inline">\(k^*\)</span>可以作为VLM的动作token。典型训练目标由动作重建、码本更新和commitment约束组成：</p>
+<div class="math-display">\[
+\mathcal L_{\mathrm{VQ}}=
+\mathcal L_{\mathrm{rec}}+
+\|\operatorname{sg}[z_e]-z_q\|_2^2+
+\beta\|z_e-\operatorname{sg}[z_q]\|_2^2.
+\]</div>
+<h3 id="7-2-rvq-逐层量化残差">7.2 RVQ：逐层量化残差<a class="anchor" href="#7-2-rvq-逐层量化残差">#</a></h3>
+<p>单层VQ必须在码本大小与重建精度之间折中。Residual Vector Quantization使用多轮码本逐步编码残差：</p>
+<div class="math-display">\[
+z_q=\sum_{r=1}^{R}e_{k_r}^{(r)},
+\qquad
+r_j=z-\sum_{i=1}^{j}e_{k_i}^{(i)}.
+\]</div>
+<p>第一层可表达动作大方向，后续层补偿幅度、速度与高频细节。它能用多个较小码本获得高组合容量，但会增加动作token数量和自回归长度。</p>
+<h3 id="7-3-actioncodec-为vla优化的学习式动作tokenizer">7.3 ActionCodec：为VLA优化的学习式动作tokenizer<a class="anchor" href="#7-3-actioncodec-为vla优化的学习式动作tokenizer">#</a></h3>
+<p>ActionCodec不是泛指所有动作codec，而是面向VLA优化提出的学习式tokenizer。它强调仅追求低重建误差并不足够；好的action token还应具有较高的相邻时间重合度、较低词表冗余、较强视觉—语言互信息和较低token间依赖。<a href="https://arxiv.org/abs/2602.15397">ActionCodec论文</a></p>
+<p>G0.5使用的跨本体ActionCodec进一步采用身体部件分组。不同机器人被映射到共享27维布局：</p>
+<pre><code class="language-text">left_control(9) | left_gripper(1) |
+right_control(9) | right_gripper(1) |
+lower_body(7)
+</code></pre>
+<p>左臂、右臂与下半身分别量化，只有活动部件生成token；不存在的自由度用padding和mask处理。时间对比目标用于提高相邻动作的token一致性。其抽象流程是</p>
+<div class="math-display">\[
+A^{(g)}\xrightarrow{E}
+z^{(g)}\xrightarrow{\mathrm{RVQ}}
+(k_1^{(g)},\ldots,k_R^{(g)})
+\xrightarrow{D}
+\hat A^{(g)},
+\]</div>
+<p>其中<span class="math-inline">\(g\)</span>表示左臂、右臂或下半身运动组。</p>
+<h3 id="7-4-fast与actioncodec的本质区别">7.4 FAST与ActionCodec的本质区别<a class="anchor" href="#7-4-fast与actioncodec的本质区别">#</a></h3>
+<table>
+<thead>
+<tr>
+  <th>维度</th>
+  <th>FAST</th>
+  <th>ActionCodec</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>核心机制</td>
+  <td>DCT＋标量量化＋BPE</td>
+  <td>神经编码器/解码器＋RVQ</td>
+</tr>
+<tr>
+  <td>时间先验</td>
+  <td>固定频域平滑先验</td>
+  <td>从数据学习时序特征</td>
+</tr>
+<tr>
+  <td>tokenizer训练</td>
+  <td>主要训练BPE词表</td>
+  <td>需要训练神经codec与码本</td>
+</tr>
+<tr>
+  <td>可解释性</td>
+  <td>token可追溯到频率系数模式</td>
+  <td>token对应学习到的隐向量</td>
+</tr>
+<tr>
+  <td>主要风险</td>
+  <td>高频细节量化损失、变长序列</td>
+  <td>码本坍塌、冗余与AR层数增加</td>
+</tr>
+<tr>
+  <td>跨本体策略</td>
+  <td>FAST+通用统计词表</td>
+  <td>统一布局、分部件编码和mask</td>
+</tr>
+</tbody>
+</table>
+<p>因此，FAST是信号处理式压缩，ActionCodec是学习式表示。二者都把连续动作变成VLM可生成的token，但不能混为同一种VQ-VAE方法。</p>
+<h2 id="8-action-expert与π0-π0-5">8. Action Expert与π0/π0.5<a class="anchor" href="#8-action-expert与π0-π0-5">#</a></h2>
+<h3 id="8-1-action-expert是什么">8.1 Action Expert是什么<a class="anchor" href="#8-1-action-expert是什么">#</a></h3>
+<p>Action Expert不是预编程skill，也不是与flow matching平级的算法，而是VLA中专门处理机器人状态、带噪动作和连续轨迹生成的一组神经网络权重。π0从PaliGemma VLM初始化语义主干，并增加约300M参数的Action Expert；两组权重通过Transformer注意力交互。<a href="https://arxiv.org/abs/2410.24164">π0论文</a></p>
+<p>该设计可理解为一种按模态分工的mixture-of-experts：</p>
+<pre><code class="language-text">图像、文本 ──→ VLM主干：语义、物体、任务关系
+                       ↕ cross-modal attention
+状态、带噪动作 ─→ Action Expert：连续轨迹向量场
+</code></pre>
+<p>“expert”不是传统机器人系统中预先编写的技能控制器，而是一组专门学习动作分布的神经网络权重。</p>
+<h3 id="8-2-action-expert如何训练">8.2 Action Expert如何训练<a class="anchor" href="#8-2-action-expert如何训练">#</a></h3>
+<p>一条机器人示范提供当前条件</p>
+<div class="math-display">\[
+c_t=(I_t^{1:V},\ell_t,q_t)
+\]</div>
+<p>和未来动作块</p>
+<div class="math-display">\[
+A_t=[a_t,a_{t+1},\ldots,a_{t+H-1}].
+\]</div>
+<p>训练一次flow-matching Action Expert的步骤是：</p>
+<ol>
+<li>按本体统计量归一化<span class="math-inline">\(A_t\)</span>，并对padding自由度建立mask。</li>
+<li>采样<span class="math-inline">\(\epsilon\sim\mathcal N(0,I)\)</span>与<span class="math-inline">\(\tau\in[0,1]\)</span>。</li>
+<li>构造<span class="math-inline">\(A_t^\tau=\tau A_t+(1-\tau)\epsilon\)</span>。</li>
+<li>VLM编码图像与语言；状态和带噪动作进入Action Expert。</li>
+<li>Action Expert预测<span class="math-inline">\(v_\theta(A_t^\tau,\tau,c_t)\)</span>。</li>
+<li>用<span class="math-inline">\(A_t-\epsilon\)</span>或与实现方向一致的等价目标计算masked MSE。</li>
+<li>联合更新Action Expert及允许训练的VLM参数。</li>
+</ol>
+<p>其本质是生成式行为克隆，而不是依赖奖励函数的强化学习。为了避免机器人数据破坏VLM语义能力，可以冻结VLM、使用较低学习率，或混入Web/VQA的next-token loss：</p>
+<div class="math-display">\[
+\mathcal L=lambda_{FM}\mathcal L_{FM}+
+\lambda_{VLM}\mathcal L_{NTP}.
+\]</div>
+<p>动作token在块内通常采用双向注意力，以便未来<span class="math-inline">\(H\)</span>步共同形成协调轨迹；图像、语言和状态前缀可缓存KV，减少多次ODE积分中的重复计算。</p>
+<h3 id="8-3-π0-5的训练逻辑">8.3 π0.5的训练逻辑<a class="anchor" href="#8-3-π0-5的训练逻辑">#</a></h3>
+<p>π0.5将训练分成两个阶段。<a href="https://www.physicalintelligence.company/download/pi05.pdf">π0.5技术报告</a></p>
+<p><strong>第一阶段：大规模异构预训练。</strong> 模型混合多种机器人本体数据、互联网视觉语言数据和高层语义预测任务，目标是获得跨本体动作先验和开放世界语义能力。</p>
+<p><strong>第二阶段：任务相关后训练。</strong> 模型使用与目标移动操作更相关的高质量数据，同时学习两类推理：</p>
+<ul>
+<li>高层语言subtask预测；</li>
+<li>基于flow matching的连续action chunk预测。</li>
+</ul>
+<p>后训练让模型从“具有广泛先验”转向“在目标域中输出精细连续动作”。FAST token、Web/VQA共训练和连续Action Expert的联合配方在后续knowledge-insulation工作中得到更明确的整合，因此本文不把所有相关机制都笼统归为原始π0.5单一训练阶段。</p>
+<h3 id="8-4-高层subtask如何参与推理">8.4 高层subtask如何参与推理<a class="anchor" href="#8-4-高层subtask如何参与推理">#</a></h3>
+<p>给定任务指令<span class="math-inline">\(\ell\)</span>和当前观测<span class="math-inline">\(o_t\)</span>，高层首先生成短时子任务：</p>
+<div class="math-display">\[
+z_t\sim p_\theta(z\mid o_t,\ell).
+\]</div>
+<p>随后动作专家以该subtask为条件生成动作块：</p>
+<div class="math-display">\[
+A_t\sim\pi_\theta(A\mid o_t,q_t,z_t).
+\]</div>
+<p>执行若干步后重新观察并更新subtask。这种结构类似语言形式的隐变量策略：subtask既提供时间抽象，又提供可解释的中间接口。它能把“把所有衣服从地上捡起来”分解成选择目标、接近、抓取、放置和转向下一个目标，而不是要求低层策略在一个连续隐状态中记住整个长任务。</p>
+<h3 id="8-5-π0-5如何生成action-chunk">8.5 π0.5如何生成action chunk<a class="anchor" href="#8-5-π0-5如何生成action-chunk">#</a></h3>
+<p>其连续动作生成过程可概括为：</p>
+<ol>
+<li>将当前多视角图像、任务语言、当前subtask和本体状态编码成上下文token。</li>
+<li>采样一个与目标action chunk同shape的高斯噪声张量<span class="math-inline">\(A^0\in\mathbb R^{H\times d_a}\)</span>。</li>
+<li>将带噪动作、flow时间<span class="math-inline">\(\tau\)</span>以及多模态上下文送入action expert。</li>
+<li>action expert预测整个<span class="math-inline">\(H\times d_a\)</span>张量上的向量场，而不是只预测一个动作。</li>
+<li>使用若干ODE积分步把噪声沿向量场变换成连续动作块<span class="math-inline">\(A^1\)</span>。</li>
+<li>执行动作块的一部分，并基于新观测重新生成，而不是长期完全开环。</li>
+</ol>
+<p>所以action chunk不是逐个token自回归地产生每个连续数值，而是作为一个整体从噪声轨迹经flow变换得到。动作间的相关性由action expert在整个时间—动作张量上共同建模。</p>
+<h3 id="8-6-π0-5与-知识绝缘-问题">8.6 π0.5与“知识绝缘”问题<a class="anchor" href="#8-6-π0-5与-知识绝缘-问题">#</a></h3>
+<p>VLA共同训练VLM任务与机器人动作时，存在语义知识被机器人数据破坏，或动作学习被语言任务干扰的风险。后续knowledge insulation工作从参数和注意力结构上研究如何隔离不同模态的更新，同时允许信息交互；其训练同时使用FAST动作token进行表示学习、通用视觉语言数据保持泛化，并用连续Action Expert输出动作。理论上，这支持一种重要原则：语义主干与动作专家应共享上下文，但不必完全共享所有权重和优化压力。<a href="https://www.physicalintelligence.company/download/pi05_KI.pdf">Knowledge Insulating VLA</a></p>
+<h2 id="9-g0-5-统一自回归推理与动作">9. G0.5：统一自回归推理与动作<a class="anchor" href="#9-g0-5-统一自回归推理与动作">#</a></h2>
+<h3 id="9-1-vlm-as-encoder与vlm-as-actor">9.1 VLM-as-Encoder与VLM-as-Actor<a class="anchor" href="#9-1-vlm-as-encoder与vlm-as-actor">#</a></h3>
+<p>π0式架构把VLM输出作为Action Expert的条件：</p>
+<pre><code class="language-text">图像/语言 → VLM hidden state → Flow Action Expert → 连续动作
+</code></pre>
+<p>G0.5的主路径则让同一个Qwen3.5-2B初始化的decoder依次生成具身推理和动作token：</p>
+<pre><code class="language-text">图像/语言/状态 → Subtask → BBox → Trace → ActionHint
+              → ActionCodec Tokens → 连续动作
+</code></pre>
+<p>训练时对整个生成段使用next-token交叉熵。由于ActionCodec token位于推理token之后，动作能够直接注意显式subtask与grounding结果。这是“VLM-as-Actor”的核心含义，而不是说模型绕过了ActionCodec解码器和底层机器人控制栈。</p>
+<h3 id="9-2-跨本体动作空间与视觉记忆">9.2 跨本体动作空间与视觉记忆<a class="anchor" href="#9-2-跨本体动作空间与视觉记忆">#</a></h3>
+<p>G0.5把14种真实或仿真本体映射到共享27维动作布局，并用分组RVQ生成活动身体部件的token。视觉侧使用约5秒、6帧的历史窗口，通过因子化时空注意力注入短期记忆；训练时随机丢弃部分历史帧，最终层丢弃历史token以控制推理开销。</p>
+<h3 id="9-3-训练数据与监督结构">9.3 训练数据与监督结构<a class="anchor" href="#9-3-训练数据与监督结构">#</a></h3>
+<p>机器人轨迹由自动流水线产生多粒度监督：规则切分与多模态模型生成原子指令和ActionHint，检测/分割跟踪模型产生BBox，正向运动学把末端轨迹投影为图像Trace。机器人数据与约1亿视觉语言/VQA样本混合训练，官方披露的VQA与action样本比例约为1:4。<a href="https://opengalaxea.github.io/G05/">G0.5技术博客</a></p>
+<p>这些监督扩大了可解释接口，但也带来自动标注噪声、相机标定误差和外部模型偏差。公开结果应区分仿真后训练、真机微调和未见本体零样本设置，不能把所有分数统一解释为通用真机能力。</p>
+<h3 id="9-4-对franka的启示">9.4 对Franka的启示<a class="anchor" href="#9-4-对franka的启示">#</a></h3>
+<p>Franka研究可以比较两条严格对齐的动作路径：</p>
+<ol>
+<li><strong>Encoder+Expert</strong>：同一VLM条件下，用flow matching生成连续<span class="math-inline">\(H\times7\)</span>相对末端动作。</li>
+<li><strong>Actor+Codec</strong>：同一VLM直接生成分组RVQ token，再由ActionCodec重建连续动作。</li>
+</ol>
+<p>公平比较应固定图像、语言、状态输入、训练轨迹、动作归一化、控制频率、执行长度和安全控制器，并同时报告成功率、过程进度、动作延迟、重建误差、jerk、失败恢复率和OOD grounding。</p>
+<h2 id="10-多任务-skill与层级学习">10. 多任务、skill与层级学习<a class="anchor" href="#10-多任务-skill与层级学习">#</a></h2>
+<h3 id="10-1-任务标签-不等于-skill">10.1 “任务标签”不等于“skill”<a class="anchor" href="#10-1-任务标签-不等于-skill">#</a></h3>
+<p>整轨迹指令“从地上捡起玩具”和“从桌上捡起杯子”是两个任务，但它们可能共享</p>
+<pre><code class="language-text">approach → align_gripper → close_gripper → lift
+</code></pre>
+<p>如果只用整轨迹语言监督，模型可能从数据中隐式发现这种共性，却没有被要求形成一致的<code>pick_up</code>中间表示。显式skill学习需要至少具备：</p>
+<ul>
+<li>统一的skill词表；</li>
+<li>skill在轨迹中的时间边界；</li>
+<li>目标物体、支撑面、高度和抓取方式等上下文；</li>
+<li>skill之间允许的转移关系。</li>
+</ul>
+<p>因此更合理的表示是</p>
+<div class="math-display">\[
+z_t=(\texttt{pick\_up},\text{object},\text{support surface},
+\text{target pose},\text{constraints}),
+\]</div>
+<p>既共享<code>pick_up</code>语义，又保留地面和桌面的几何差异。</p>
+<h3 id="10-2-层级行为克隆">10.2 层级行为克隆<a class="anchor" href="#10-2-层级行为克隆">#</a></h3>
+<p>若数据具有subtask标注，可以联合优化高层和低层目标：</p>
+<div class="math-display">\[
+\mathcal L=lambda_{high}\mathcal L_{subtask}
++\lambda_{low}\mathcal L_{action}
++\lambda_{aux}\mathcal L_{auxiliary}.
+\]</div>
+<p>其中<span class="math-inline">\(\mathcal L_{subtask}\)</span>通常是语言token交叉熵，<span class="math-inline">\(\mathcal L_{action}\)</span>可以是离散动作交叉熵、连续回归或flow matching损失，辅助任务可包括物体检测、视觉问答或状态预测。高层标签减少长程credit assignment难度，低层连续损失保留控制精度。</p>
+<h3 id="10-3-隐式与显式层级的权衡">10.3 隐式与显式层级的权衡<a class="anchor" href="#10-3-隐式与显式层级的权衡">#</a></h3>
+<p>显式subtask提高可解释性、可编辑性和长任务稳定性，但错误的skill taxonomy会限制策略；标注边界也具有主观性。完全隐式策略避免人工本体论，却更难诊断“看错物体、选错skill还是动作执行失败”。通用Franka研究可采用弱显式层级：高层使用较粗且可复用的原子skill，低层保留端到端视觉动作学习，不再人工规定每个skill内部的运动轨迹。</p>
+<h2 id="11-跨数据集与跨本体学习">11. 跨数据集与跨本体学习<a class="anchor" href="#11-跨数据集与跨本体学习">#</a></h2>
+<h3 id="11-1-为什么需要跨本体">11.1 为什么需要跨本体<a class="anchor" href="#11-1-为什么需要跨本体">#</a></h3>
+<p>单一Franka数据能保证动作一致性，但难以覆盖开放世界物体、场景和任务。跨本体训练通过共享视觉语义和末端操作规律扩大分布。不过，共享并不意味着原始动作可以直接拼接。</p>
+<p>可以把参数分为三层：</p>
+<ol>
+<li><strong>本体无关层</strong>：物体语义、空间关系、语言目标和视觉特征；最适合跨数据共享。</li>
+<li><strong>弱本体相关层</strong>：相对末端运动、夹爪开合、局部接触模式；经过规范化后可共享。</li>
+<li><strong>强本体相关层</strong>：关节角、关节速度、底盘、双臂协调、灵巧手自由度；需要embodiment token或专用head。</li>
+</ol>
+<h3 id="11-2-统一action-space的两种路线">11.2 统一action space的两种路线<a class="anchor" href="#11-2-统一action-space的两种路线">#</a></h3>
+<p><strong>路线A：统一末端动作。</strong> 将不同机器人转换为<span class="math-inline">\(\Delta SE(3)+gripper\)</span>，共享低层policy，再由每个本体的控制器解释。这种方式便于跨本体，但转换误差、坐标系和夹爪语义会成为噪声来源。</p>
+<p><strong>路线B：保留本体原生动作。</strong> 输入embodiment token并使用不同action head或mask。它最大程度保留数据真实性，但共享程度降低，模型可能按本体分裂成多个策略。</p>
+<p>π0/π0.5的action expert和多本体训练说明，两条路线可以结合：共享VLM语义主干与一部分动作表示，同时用状态投影、动作维度mask或本体专用参数处理差异。</p>
+<h3 id="11-3-数据混合不是均匀采样">11.3 数据混合不是均匀采样<a class="anchor" href="#11-3-数据混合不是均匀采样">#</a></h3>
+<p>大数据集会压制小而关键的目标本体数据。理论上的训练分布应写为</p>
+<div class="math-display">\[
+p_{train}(x)=\sum_{d=1}^{D}\alpha_d p_d(x),
+\qquad \sum_d\alpha_d=1,
+\]</div>
+<p>其中<span class="math-inline">\(\alpha_d\)</span>不必等于轨迹数量占比。预训练可提高跨数据集多样性，后训练则提高Franka目标域和高质量数据权重。两阶段训练本质上是先学习宽分布先验，再改变训练分布以获得目标域控制精度。</p>
+<h2 id="12-行为克隆的局限及改进方向">12. 行为克隆的局限及改进方向<a class="anchor" href="#12-行为克隆的局限及改进方向">#</a></h2>
+<h3 id="12-1-分布偏移">12.1 分布偏移<a class="anchor" href="#12-1-分布偏移">#</a></h3>
+<p>标准行为克隆只在专家状态分布<span class="math-inline">\(d_E(s)\)</span>上训练：</p>
+<div class="math-display">\[
+\min_\theta\mathbb E_{(s,a)\sim d_E}
+[\ell(\pi_\theta(s),a)].
+\]</div>
+<p>部署时，策略的小误差会把系统带到专家数据未覆盖的状态，导致后续误差继续放大。action chunk可以减少高频噪声，却不能从根本上消除分布偏移。改进方向包括收集恢复轨迹、主动干预数据、DAgger式在线聚合、失败数据训练，以及利用价值模型或成功预测器进行候选动作筛选。</p>
+<h3 id="12-2-多模态动作">12.2 多模态动作<a class="anchor" href="#12-2-多模态动作">#</a></h3>
+<p>L2回归倾向于预测条件均值。当左右两种绕障路径都正确时，均值可能指向障碍物。离散token、混合密度模型、扩散和flow matching的共同价值，是表示<span class="math-inline">\(p(a\mid o,\ell)\)</span>而不是只预测单个均值。</p>
+<h3 id="12-3-长任务中的错误类型">12.3 长任务中的错误类型<a class="anchor" href="#12-3-长任务中的错误类型">#</a></h3>
+<p>长任务失败至少可分为：</p>
+<ul>
+<li>语义错误：目标物体或任务理解错误；</li>
+<li>规划错误：subtask顺序或终止条件错误；</li>
+<li>感知错误：遮挡、反光或视角变化导致定位失败；</li>
+<li>控制错误：轨迹不平滑、夹爪时机错误或接触不稳定；</li>
+<li>恢复错误：进入异常状态后仍重复原策略。</li>
+</ul>
+<p>因此只报告整任务成功率难以解释模型改进来源。层级模型应同时评估subtask选择准确率、阶段完成率、动作平滑性和失败恢复率。</p>
+<h2 id="13-主要vla路线比较">13. 主要VLA路线比较<a class="anchor" href="#13-主要vla路线比较">#</a></h2>
+<table>
+<thead>
+<tr>
+  <th>路线</th>
+  <th>代表模型</th>
+  <th>动作表示</th>
+  <th>训练目标</th>
+  <th>主要优点</th>
+  <th>主要局限</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>离散逐步动作</td>
+  <td>RT-1</td>
+  <td>分箱动作token</td>
+  <td>交叉熵</td>
+  <td>Transformer规模化、多任务训练</td>
+  <td>量化误差，长输出序列</td>
+</tr>
+<tr>
+  <td>VLM共训练VLA</td>
+  <td>RT-2</td>
+  <td>文本化动作token</td>
+  <td>VLM与机器人任务联合交叉熵</td>
+  <td>网络语义迁移、开放语言理解</td>
+  <td>控制精度和推理速度受token化影响</td>
+</tr>
+<tr>
+  <td>开源离散VLA</td>
+  <td>OpenVLA</td>
+  <td>7D离散动作token</td>
+  <td>next-token prediction</td>
+  <td>开放、易微调、VLM工具链成熟</td>
+  <td>默认逐步离散动作不擅长高频连续轨迹</td>
+</tr>
+<tr>
+  <td>直接chunk回归</td>
+  <td>ACT</td>
+  <td>连续action chunk</td>
+  <td>L1/L2及潜变量目标</td>
+  <td>推理快、短时轨迹一致</td>
+  <td>多模态分布表达能力有限</td>
+</tr>
+<tr>
+  <td>连续生成策略</td>
+  <td>Diffusion Policy</td>
+  <td>连续action chunk</td>
+  <td>去噪目标</td>
+  <td>多模态、轨迹质量高</td>
+  <td>多步去噪造成延迟</td>
+</tr>
+<tr>
+  <td>VLM＋flow expert</td>
+  <td>π0</td>
+  <td>连续action chunk</td>
+  <td>flow matching</td>
+  <td>语义主干与动作生成分工</td>
+  <td>架构与训练复杂、数据需求大</td>
+</tr>
+<tr>
+  <td>开放世界共训练</td>
+  <td>π0.5</td>
+  <td>高层subtask＋连续flow chunk</td>
+  <td>Web/VLM目标＋subtask CE＋flow loss</td>
+  <td>跨本体、跨环境与长任务泛化</td>
+  <td>依赖高质量异构数据和subtask标注</td>
+</tr>
+<tr>
+  <td>频域动作token</td>
+  <td>π0-FAST/FAST+</td>
+  <td>DCT量化＋BPE token</td>
+  <td>next-token prediction</td>
+  <td>序列压缩、训练效率高</td>
+  <td>有损量化、变长AR解码</td>
+</tr>
+<tr>
+  <td>学习式动作token</td>
+  <td>ActionCodec/FASTerVQ</td>
+  <td>VQ/RVQ token</td>
+  <td>重建＋码本＋时间/表示目标</td>
+  <td>非线性表示、可做分部件建模</td>
+  <td>码本利用率和重建—语义权衡</td>
+</tr>
+<tr>
+  <td>统一AR Actor</td>
+  <td>G0.5</td>
+  <td>CoT＋ActionCodec token，可选FM head</td>
+  <td>统一CE＋可选辅助FM</td>
+  <td>推理与动作直接耦合、prompt可控</td>
+  <td>AR延迟、自动标注噪声与安全验证不足</td>
+</tr>
+</tbody>
+</table>
+<h2 id="14-面向franka的理论技术路线">14. 面向Franka的理论技术路线<a class="anchor" href="#14-面向franka的理论技术路线">#</a></h2>
+<p>综合上述算法，适合Franka通用skill研究的理论方案可表示为：</p>
+<pre><code class="language-text">多视角RGB + 语言任务 + Franka状态
+                │
+                ▼
+         预训练VLM语义主干
+                │
+      Subtask / Grounding
+                │
+       ┌────────┴─────────┐
+       ▼                  ▼
+Flow Action Expert   FAST/ActionCodec Tokens
+  连续动作路径          离散动作路径
+       └────────┬─────────┘
+                ▼
+       H步相对末端Action Chunk
+                ▼
+       执行前h步并重新观察
+                └──────────→ 闭环重规划
+</code></pre>
+<p>推荐的理论设计选择如下：</p>
+<ol>
+<li><strong>任务表示</strong>：使用自然语言高层任务，并预测短时subtask文本或离散skill变量。</li>
+<li><strong>视觉表示</strong>：外部相机负责全局语义，腕部相机负责局部接触；使用camera-role embedding区分视角。</li>
+<li><strong>状态表示</strong>：连续输入7维关节角、末端位姿和夹爪宽度；状态投影成soft token。</li>
+<li><strong>动作表示</strong>：跨数据预训练使用基座坐标系下的相对末端<span class="math-inline">\(\Delta xyz+\Delta axis\text{-}angle+gripper\)</span>。</li>
+<li><strong>动作生成</strong>：建立同输入、同数据的两条可替换基线：flow Action Expert一次生成<span class="math-inline">\(H\times7\)</span>连续chunk；FAST/ActionCodec路线自回归生成压缩token并解码。轻量下界可采用ACT式直接回归。</li>
+<li><strong>闭环方式</strong>：预测<span class="math-inline">\(H\)</span>步，只执行前<span class="math-inline">\(h\)</span>步；接触密集阶段减小<span class="math-inline">\(h\)</span>，自由空间运动阶段可增大<span class="math-inline">\(h\)</span>。</li>
+<li><strong>多任务学习</strong>：共享<code>reach/pick_up/lift/place/open/close</code>等skill，同时把目标物体、支撑面和目标容器作为上下文，而不是拆成完全无关的任务类。</li>
+<li><strong>训练阶段</strong>：先在广泛多任务、多本体数据上获得语义和动作先验，再用Franka及目标场景数据后训练；不得把统一shape视为已经统一动作语义。</li>
+<li><strong>评估原则</strong>：除任务成功率外，报告动作生成延迟、执行频率、jerk、碰撞/限位触发、过程进度、失败恢复率和OOD目标识别。</li>
+</ol>
+<p>这里的<span class="math-inline">\(H\)</span>、<span class="math-inline">\(h\)</span>、控制频率和各损失权重属于待实验确定的设计变量，不是π0.5论文给出的通用固定值。</p>
+<h2 id="15-可形成论文工作的研究问题">15. 可形成论文工作的研究问题<a class="anchor" href="#15-可形成论文工作的研究问题">#</a></h2>
+<h3 id="15-1-状态感知的动作生成">15.1 状态感知的动作生成<a class="anchor" href="#15-1-状态感知的动作生成">#</a></h3>
+<p>研究问题：在视觉内容相似但Franka关节构型不同的情况下，状态条件能否减少action token或continuous action的歧义？可比较无状态、连续state token、cross-attention state和state-conditioned decoder。</p>
+<h3 id="15-2-skill一致性与跨场景复用">15.2 Skill一致性与跨场景复用<a class="anchor" href="#15-2-skill一致性与跨场景复用">#</a></h3>
+<p>研究问题：把“从地面捡”和“从桌面捡”标成共享<code>pick_up</code>、不同context，是否优于把它们当作两个独立任务？可比较整轨迹语言、显式skill标签和自动发现latent skill三种方案。</p>
+<h3 id="15-3-chunk视野与闭环频率">15.3 Chunk视野与闭环频率<a class="anchor" href="#15-3-chunk视野与闭环频率">#</a></h3>
+<p>研究问题：<span class="math-inline">\(H\)</span>增大带来的轨迹一致性，何时会被开环误差抵消？可在自由空间、抓取接触和长任务三个阶段使用自适应chunk执行长度。</p>
+<h3 id="15-4-离散预训练与连续后训练">15.4 离散预训练与连续后训练<a class="anchor" href="#15-4-离散预训练与连续后训练">#</a></h3>
+<p>研究问题：FAST或ActionCodec离散动作预训练学到的表示，如何最有效地迁移到flow Action Expert？可比较共享Transformer层、冻结VLM、分阶段解冻、知识绝缘和联合token/FM训练。</p>
+<h3 id="15-5-跨本体数据的有效边界">15.5 跨本体数据的有效边界<a class="anchor" href="#15-5-跨本体数据的有效边界">#</a></h3>
+<p>研究问题：跨本体数据的收益主要来自视觉语义、skill顺序还是低层运动？可以逐层冻结语义主干、subtask head和action expert，分析不同数据只在哪一层产生迁移。</p>
+<h2 id="16-结论">16. 结论<a class="anchor" href="#16-结论">#</a></h2>
+<p>VLA的发展路线可以概括为：RT-1证明大规模多任务机器人Transformer具有可扩展性；RT-2把互联网视觉语言知识与机器人动作放入统一token空间；OpenVLA提供可公开复现的离散动作范式；ACT与Diffusion Policy推动action chunk和多模态连续轨迹建模；π0通过flow-matching Action Expert连接预训练VLM与高频连续控制；π0.5把异构共训练、高层subtask和连续动作生成推向开放世界；FAST与ActionCodec改善了动作token的压缩和可学习性；G0.5则进一步尝试让VLM在同一自回归流中直接生成具身推理与动作。</p>
+<p>面向Franka，最值得采用的不是照搬某个模型名称，而是把接口与假设拆开验证：预训练VLM提供开放语义，显式subtask提供时间抽象，连续状态约束当前物理构型，Flow/Diffusion Expert或ActionCodec表示多模态动作块，滚动时域执行维持闭环。最终的通用skill能力来自“共享技能结构＋多样上下文＋可表达的动作分布＋安全闭环”的共同学习，而不是仅靠扩大模型或整轨迹任务标签数量。</p>
+<h2 id="参考资料">参考资料<a class="anchor" href="#参考资料">#</a></h2>
+<ol>
+<li><a href="https://arxiv.org/abs/2212.06817">RT-1: Robotics Transformer for Real-World Control at Scale</a></li>
+<li><a href="https://arxiv.org/abs/2307.15818">RT-2: Vision-Language-Action Models Transfer Web Knowledge to Robotic Control</a></li>
+<li><a href="https://arxiv.org/abs/2406.09246">OpenVLA: An Open-Source Vision-Language-Action Model</a></li>
+<li><a href="https://github.com/openvla/openvla">OpenVLA官方代码</a></li>
+<li><a href="https://www.physicalintelligence.company/blog/pi0">π0: A Vision-Language-Action Flow Model for General Robot Control</a></li>
+<li><a href="https://www.physicalintelligence.company/download/pi05.pdf">π0.5: a Vision-Language-Action Model with Open-World Generalization</a></li>
+<li><a href="https://arxiv.org/abs/2501.09747">FAST: Efficient Action Tokenization for Vision-Language-Action Models</a></li>
+<li><a href="https://www.physicalintelligence.company/download/pi05_KI.pdf">Knowledge Insulating Vision-Language-Action Models</a></li>
+<li><a href="https://arxiv.org/abs/2304.13705">Learning Fine-Grained Bimanual Manipulation with Low-Cost Hardware（ACT）</a></li>
+<li><a href="https://arxiv.org/abs/2303.04137">Diffusion Policy: Visuomotor Policy Learning via Action Diffusion</a></li>
+<li><a href="https://arxiv.org/abs/2310.08864">Open X-Embodiment: Robotic Learning Datasets and RT-X Models</a></li>
+<li><a href="https://arxiv.org/abs/2403.12945">DROID: A Large-Scale In-the-Wild Robot Manipulation Dataset</a></li>
+<li><a href="https://arxiv.org/abs/2205.06175">A Generalist Agent（Gato）</a></li>
+<li><a href="https://arxiv.org/abs/2204.01691">Do As I Can, Not As I Say（SayCan）</a></li>
+<li><a href="https://arxiv.org/abs/2303.03378">PaLM-E: An Embodied Multimodal Language Model</a></li>
+<li><a href="https://arxiv.org/abs/2405.12213">Octo: An Open-Source Generalist Robot Policy</a></li>
+<li><a href="https://openreview.net/forum?id=PqvMRDCJT9t">Flow Matching for Generative Modeling</a></li>
+<li><a href="https://arxiv.org/abs/2410.24164">π0: A Vision-Language-Action Flow Model for General Robot Control</a></li>
+<li><a href="https://arxiv.org/abs/2602.15397">ActionCodec: What Makes for Good Action Tokenizers</a></li>
+<li><a href="https://arxiv.org/abs/2512.04952">FASTer: Toward Efficient Autoregressive Vision Language Action Modeling</a></li>
+<li><a href="https://opengalaxea.github.io/G05/Galaxea_G0_5.pdf">Galaxea G0.5 Technical Report</a></li>
+<li><a href="https://github.com/OpenGalaxea/GalaxeaVLA">GalaxeaVLA G0.5官方代码与权重说明</a></li>
+</ol>
+<h3 id="证据与边界说明">证据与边界说明<a class="anchor" href="#证据与边界说明">#</a></h3>
+<ul>
+<li>π0.5原始报告、π0-FAST与Knowledge Insulation属于相互关联但不完全相同的工作；本文已分别描述异构共训练、FAST表示学习和连续Action Expert，避免把所有机制合并成同一版本。</li>
+<li>G0.5的14种本体、27维共享布局、视觉记忆、CoT字段和公开评测来自官方技术报告/代码说明；这些结果横跨零样本、仿真后训练和真机微调，不能视为同一难度的统一能力证明。</li>
+<li>不同flow matching论文可能采用相反的时间参数方向；本文公式表达的是等价的向量场学习思想，具体实现应以所复现代码的插值和ODE方向为准。</li>
+<li>本文不把跨数据集统一shape等同于统一语义。动作参考系、旋转约定、控制频率与夹爪方向仍是理论比较和实验设计的一部分。</li>
+<li>2026年的新动作tokenizer工作仍在快速演进，本文以RT-1/RT-2、OpenVLA、ACT、Diffusion Policy、FAST和π0/π0.5构成主干，不将单一新结果视为已定论。</li>
+</ul>
+
+</main>
+</body>
+</html>
