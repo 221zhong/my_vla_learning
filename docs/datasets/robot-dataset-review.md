@@ -2,7 +2,7 @@
 
 **检索截止：2026-08-06**　　**范围：以真实机器人、公开可获取、可用于模仿学习/VLA 的轨迹数据为主**
 
-![数据集选型图](../../assets/figures/dataset_selection_map_v2.png)
+![数据集选型图](../../assets/figures/robot-dataset-map.png)
 
 ## 1. 口径与术语
 
