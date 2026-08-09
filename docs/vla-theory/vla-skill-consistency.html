@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="VLA 训练中 Skill 一致性与跨场景复用研究：比较整轨迹语言、显式 Skill 标签和自动发现 Latent Skill 三种方案。">
+  <title>VLA Skill 一致性与跨场景复用</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --navy:#08275d; --blue:#1769e0; --cyan:#00a6b2; --teal:#087e79;
+      --orange:#ed6c02; --ink:#172238; --muted:#5f6c80; --line:#d8e2ee;
+      --wash:#eef5fb; --paper:#ffffff; --soft-blue:#eaf2ff; --soft-teal:#e7f7f5;
+      --soft-orange:#fff2e6; --shadow:0 18px 50px rgba(8,39,93,.09);
+    }
+    * { box-sizing:border-box; }
+    html { scroll-behavior:smooth; scroll-padding-top:30px; }
+    body { margin:0; color:var(--ink); background:var(--wash); font:16px/1.75 system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif; }
+    a { color:var(--blue); text-underline-offset:3px; }
+    code { padding:.12em .38em; border-radius:5px; background:#e9eff6; color:#133d72; font:88%/1.5 Consolas,"Cascadia Code",monospace; }
+    .topbar { border-bottom:1px solid rgba(216,226,238,.85); background:rgba(255,255,255,.88); backdrop-filter:blur(12px); }
+    .topbar-inner { display:flex; width:min(1240px,calc(100% - 32px)); min-height:58px; margin:auto; align-items:center; justify-content:space-between; gap:20px; }
+    .brand { color:var(--navy); font-weight:800; text-decoration:none; letter-spacing:.02em; }
+    .crumb { color:var(--muted); font-size:.88rem; }
+    .hero { position:relative; overflow:hidden; padding:76px 0 68px; color:white; background:var(--navy); }
+    .hero::after { content:""; position:absolute; inset:0; opacity:.34; background-image:linear-gradient(rgba(255,255,255,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.08) 1px,transparent 1px); background-size:44px 44px; mask-image:linear-gradient(90deg,transparent,black 55%,transparent); }
+    .hero-inner { position:relative; z-index:1; display:grid; width:min(1240px,calc(100% - 32px)); margin:auto; grid-template-columns:minmax(0,1.25fr) minmax(300px,.75fr); gap:64px; align-items:center; }
+    .eyebrow { display:flex; align-items:center; gap:10px; margin:0 0 18px; color:#8fe5e7; font:700 .78rem/1.4 Consolas,"Cascadia Code",monospace; letter-spacing:.13em; text-transform:uppercase; }
+    .eyebrow::before { content:""; width:34px; height:2px; background:var(--cyan); }
+    h1 { max-width:820px; margin:0; font-size:clamp(2.6rem,5.7vw,5.6rem); line-height:1.02; letter-spacing:-.055em; }
+    .hero-lead { max-width:760px; margin:26px 0 0; color:#d3e2f5; font-size:clamp(1.02rem,1.7vw,1.24rem); }
+    .hero-decision { position:relative; padding:28px; border:1px solid rgba(255,255,255,.18); background:rgba(255,255,255,.08); box-shadow:0 20px 60px rgba(0,0,0,.17); }
+    .hero-decision::before { content:"RECOMMENDATION"; position:absolute; top:-11px; left:20px; padding:2px 8px; color:var(--navy); background:#8fe5e7; font:800 .66rem/1.5 Consolas,monospace; letter-spacing:.09em; }
+    .hero-decision strong { display:block; margin-bottom:9px; font-size:1.35rem; }
+    .hero-decision p { margin:0; color:#dbe7f7; }
+    .layout { display:grid; width:min(1240px,calc(100% - 32px)); margin:36px auto 80px; grid-template-columns:230px minmax(0,1fr); gap:34px; align-items:start; }
+    .toc { position:sticky; top:24px; padding:20px 0; border-top:3px solid var(--navy); border-bottom:1px solid var(--line); }
+    .toc-title { margin:0 0 12px; color:var(--navy); font:800 .72rem/1.5 Consolas,monospace; letter-spacing:.12em; text-transform:uppercase; }
+    .toc a { display:block; padding:6px 0; color:var(--muted); font-size:.91rem; text-decoration:none; }
+    .toc a:hover,.toc a:focus-visible { color:var(--blue); transform:translateX(3px); }
+    main { min-width:0; }
+    section { margin:0 0 54px; }
+    h2 { margin:0 0 20px; color:var(--navy); font-size:clamp(1.55rem,3vw,2.25rem); line-height:1.2; letter-spacing:-.025em; }
+    h3 { margin:0 0 10px; color:var(--navy); font-size:1.16rem; }
+    p { margin:0 0 16px; }
+    .section-kicker { display:block; margin-bottom:8px; color:var(--teal); font:800 .74rem/1.4 Consolas,monospace; letter-spacing:.11em; text-transform:uppercase; }
+    .thesis { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+    .thesis-card { padding:26px; border:1px solid var(--line); background:var(--paper); box-shadow:var(--shadow); }
+    .thesis-card.highlight { color:white; border-color:var(--navy); background:var(--navy); }
+    .thesis-card p:last-child { margin-bottom:0; }
+    .equation { overflow:auto; margin:18px 0; padding:18px 20px; border-left:4px solid var(--cyan); background:#f5f9fd; color:var(--navy); font:600 1rem/1.7 Consolas,"Cascadia Code",monospace; text-align:center; }
+    .identity-stack { display:grid; margin-top:24px; grid-template-columns:repeat(3,1fr); border:1px solid var(--line); background:white; box-shadow:var(--shadow); }
+    .identity-stack article { padding:22px; border-right:1px solid var(--line); }
+    .identity-stack article:last-child { border-right:0; }
+    .identity-stack b { display:block; margin-bottom:5px; color:var(--navy); }
+    .identity-stack span { color:var(--muted); font-size:.92rem; }
+    .route-figure { margin:0; padding:14px; border:1px solid var(--line); background:white; box-shadow:var(--shadow); }
+    .route-figure img { display:block; width:100%; height:auto; }
+    .route-figure figcaption { padding:12px 6px 2px; color:var(--muted); font-size:.86rem; }
+    .routes { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; }
+    .route { position:relative; overflow:hidden; padding:26px 23px 22px; border:1px solid var(--line); background:white; box-shadow:0 10px 30px rgba(8,39,93,.06); }
+    .route::before { content:""; position:absolute; inset:0 0 auto; height:5px; background:var(--route-color); }
+    .route.language { --route-color:var(--blue); }
+    .route.explicit { --route-color:var(--teal); }
+    .route.latent { --route-color:var(--orange); }
+    .route-id { color:var(--route-color); font:800 .72rem/1.4 Consolas,monospace; letter-spacing:.1em; }
+    .route h3 { margin-top:11px; font-size:1.35rem; }
+    .route .verdict { min-height:68px; color:var(--muted); }
+    .route ul { padding-left:1.2em; margin:17px 0 0; }
+    .route li { margin:.4em 0; }
+    .route .fit { margin:20px -23px -22px; padding:14px 23px; color:var(--navy); background:#f3f7fb; font-size:.9rem; font-weight:700; }
+    .schema { margin:18px 0 0; padding:17px; color:#dce9fb; background:#101d32; border:1px solid #263650; font:86%/1.6 Consolas,"Cascadia Code",monospace; white-space:pre-wrap; }
+    .callout { display:grid; grid-template-columns:auto 1fr; gap:15px; padding:20px 22px; border:1px solid #ffd2ab; background:var(--soft-orange); }
+    .callout-mark { color:var(--orange); font:800 1.7rem/1 Consolas,monospace; }
+    .callout p { margin:0; }
+    .deep-dives { display:grid; gap:22px; margin-top:28px; }
+    .deep-dive { border:1px solid var(--line); background:white; box-shadow:var(--shadow); }
+    .deep-head { display:grid; padding:26px 28px; grid-template-columns:92px 1fr; gap:22px; align-items:center; border-bottom:1px solid var(--line); }
+    .deep-head.language { background:linear-gradient(90deg,var(--soft-blue),white 70%); }
+    .deep-head.explicit { background:linear-gradient(90deg,var(--soft-teal),white 70%); }
+    .deep-head.latent { background:linear-gradient(90deg,var(--soft-orange),white 70%); }
+    .deep-letter { display:grid; width:72px; height:72px; place-items:center; border:2px solid currentColor; border-radius:50%; font:800 2rem/1 Consolas,monospace; }
+    .deep-head.language .deep-letter { color:var(--blue); }
+    .deep-head.explicit .deep-letter { color:var(--teal); }
+    .deep-head.latent .deep-letter { color:var(--orange); }
+    .deep-head h3 { margin:0 0 5px; font-size:1.55rem; }
+    .deep-head p { margin:0; color:var(--muted); }
+    .deep-body { padding:28px; }
+    .detail-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:22px 28px; }
+    .detail-block { min-width:0; }
+    .detail-block h4 { display:flex; margin:0 0 8px; align-items:center; gap:8px; color:var(--navy); font-size:1rem; }
+    .detail-block h4 span { color:var(--cyan); font:800 .72rem/1 Consolas,monospace; }
+    .detail-block p,.detail-block ul { margin-top:0; color:#455369; }
+    .detail-block ul { padding-left:1.15em; }
+    .detail-block li { margin:.35em 0; }
+    .pipeline { display:flex; overflow-x:auto; margin:22px 0; padding:16px; align-items:center; border:1px dashed #b8c8da; background:#f7fafd; }
+    .pipeline span { flex:1 0 120px; padding:9px 10px; color:var(--navy); background:white; border:1px solid var(--line); font-size:.83rem; font-weight:750; text-align:center; }
+    .pipeline i { flex:0 0 28px; color:var(--cyan); font-style:normal; font-weight:900; text-align:center; }
+    .formula { overflow-x:auto; padding:14px 16px; color:#dce9fb; background:#101d32; font:86%/1.6 Consolas,"Cascadia Code",monospace; white-space:nowrap; }
+    .failure-list { display:grid; margin-top:18px; grid-template-columns:repeat(3,1fr); border-top:1px solid var(--line); border-left:1px solid var(--line); }
+    .failure-list div { padding:15px; border-right:1px solid var(--line); border-bottom:1px solid var(--line); }
+    .failure-list b { display:block; margin-bottom:4px; color:var(--orange); font-size:.86rem; }
+    .failure-list span { color:var(--muted); font-size:.84rem; }
+    .table-wrap { overflow-x:auto; border:1px solid var(--line); background:white; box-shadow:var(--shadow); }
+    table { width:100%; border-collapse:collapse; font-size:.9rem; }
+    th,td { padding:13px 14px; border-bottom:1px solid var(--line); vertical-align:top; text-align:left; }
+    th { color:var(--navy); background:#edf4fa; white-space:nowrap; }
+    tbody tr:last-child td { border-bottom:0; }
+    tbody tr:hover td { background:#f8fbfe; }
+    .rank { display:inline-grid; width:23px; height:23px; place-items:center; border-radius:50%; color:white; background:var(--navy); font-weight:800; }
+    .experiment { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+    .experiment article { padding:23px; border:1px solid var(--line); background:white; }
+    .experiment .label { display:inline-block; margin-bottom:11px; padding:3px 8px; color:white; background:var(--navy); font:800 .72rem/1.4 Consolas,monospace; }
+    .experiment ul { margin:10px 0 0; padding-left:1.2em; }
+    .metrics { display:grid; grid-template-columns:repeat(2,1fr); gap:16px; }
+    .metric { padding:23px; border:1px solid var(--line); background:white; }
+    .metric-no { color:var(--cyan); font:800 1.8rem/1 Consolas,monospace; }
+    .metric p { margin-bottom:0; color:var(--muted); }
+    .architecture { padding:30px; color:white; background:var(--navy); box-shadow:var(--shadow); }
+    .architecture h2,.architecture .section-kicker { color:white; }
+    .flow { display:flex; margin:27px 0 0; align-items:stretch; }
+    .flow-step { flex:1; padding:18px 14px; border:1px solid rgba(255,255,255,.2); background:rgba(255,255,255,.07); text-align:center; }
+    .flow-arrow { display:grid; width:34px; place-items:center; color:#8fe5e7; font-size:1.4rem; }
+    .flow-step b { display:block; margin-bottom:4px; color:#8fe5e7; }
+    .loss { margin:24px 0 0; padding:18px; color:#e7f3ff; background:rgba(0,0,0,.18); font:600 .91rem/1.7 Consolas,monospace; text-align:center; }
+    .refs { columns:2; column-gap:34px; padding-left:1.4em; }
+    .refs li { break-inside:avoid; margin:0 0 10px; }
+    footer { padding:30px 16px 48px; color:var(--muted); text-align:center; }
+    :focus-visible { outline:3px solid #ffb26b; outline-offset:3px; }
+    @media (max-width:980px) {
+      .hero-inner,.layout { grid-template-columns:1fr; }
+      .hero-inner { gap:38px; }
+      .toc { position:static; display:grid; grid-template-columns:repeat(3,1fr); gap:0 16px; }
+      .toc-title { grid-column:1/-1; }
+      .routes,.experiment { grid-template-columns:1fr; }
+      .detail-grid { grid-template-columns:1fr; }
+      .identity-stack { grid-template-columns:1fr; }
+      .identity-stack article { border-right:0; border-bottom:1px solid var(--line); }
+      .identity-stack article:last-child { border-bottom:0; }
+    }
+    @media (max-width:650px) {
+      .hero { padding:54px 0; }
+      .topbar .crumb { display:none; }
+      .thesis,.metrics { grid-template-columns:1fr; }
+      .deep-head { grid-template-columns:1fr; }
+      .failure-list { grid-template-columns:1fr; }
+      .toc { grid-template-columns:1fr 1fr; }
+      .flow { flex-direction:column; }
+      .flow-arrow { width:auto; height:30px; transform:rotate(90deg); }
+      .refs { columns:1; }
+      h1 { font-size:2.8rem; }
+    }
+    @media (prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } * { transition:none!important; } }
+    @media print {
+      body { background:white; }
+      .topbar,.toc { display:none; }
+      .hero { padding:32px 0; color:var(--ink); background:white; border-bottom:2px solid var(--navy); }
+      .hero::after { display:none; }
+      .hero-lead,.hero-decision p { color:var(--muted); }
+      .hero-decision { color:var(--ink); border-color:var(--line); background:white; }
+      .layout { display:block; width:100%; margin:28px 0; }
+      main { padding:0 24px; }
+      .route,.metric,.experiment article,.thesis-card { break-inside:avoid; box-shadow:none; }
+      a { color:inherit; text-decoration:none; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="topbar" aria-label="站点导航">
+    <div class="topbar-inner">
+      <a class="brand" href="../../index.html">MY VLA LEARNING</a>
+      <span class="crumb">VLA Theory / Skill Consistency</span>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <div class="hero-inner">
+      <div>
+        <p class="eyebrow">Research note · 2026-08-09</p>
+        <h1>Skill 一致性<br>与跨场景复用</h1>
+        <p class="hero-lead">“从地面捡”和“从桌面捡”应不应该共享同一个 <code>pick_up</code>？本文比较整轨迹语言、显式 Skill 标签与自动发现 Latent Skill 三条 VLA 训练路线，并给出可验证的实验设计。</p>
+      </div>
+      <aside class="hero-decision">
+        <strong>显式标签建立上界，语言逼近上界，Latent 检验自然涌现。</strong>
+        <p>最终工程方案采用：canonical skill + 自然语言参数 + skill 内部 latent motion mode。</p>
+      </aside>
+    </div>
+  </header>
+
+  <div class="layout">
+    <nav class="toc" aria-label="页面目录">
+      <p class="toc-title">Contents</p>
+      <a href="#definition">问题定义</a>
+      <a href="#overview">三条路线</a>
+      <a href="#details">方案分析</a>
+      <a href="#language-detail">语言方案详解</a>
+      <a href="#explicit-detail">显式标签详解</a>
+      <a href="#latent-detail">Latent 详解</a>
+      <a href="#comparison">方案对比</a>
+      <a href="#experiment">实验设计</a>
+      <a href="#metrics">评价指标</a>
+      <a href="#recommendation">推荐架构</a>
+      <a href="#references">参考文献</a>
+    </nav>
+
+    <main>
+      <section id="definition">
+        <span class="section-kicker">01 · Definition</span>
+        <h2>一致的不是轨迹，而是技能身份</h2>
+        <div class="thesis">
+          <article class="thesis-card highlight">
+            <h3>应该共享</h3>
+            <p>地面拾取与桌面拾取具有相同的高层意图、成功判据和可组合角色，因此应共享 <code>pick_up</code> 技能身份。</p>
+          </article>
+          <article class="thesis-card">
+            <h3>不应强制相同</h3>
+            <p>两者的高度、接近方向、避障路径与关节构型不同，低层动作必须根据具体上下文生成。</p>
+          </article>
+        </div>
+        <div class="equation">z_skill(τ_floor) ≈ z_skill(τ_table)<br>a_floor,1:T ≠ a_table,1:T</div>
+        <div class="identity-stack">
+          <article><b>技能身份</b><span><code>pick_up</code>：跨场景共享的操作语义</span></article>
+          <article><b>技能参数</b><span>目标物体、支撑面、抓取点与目标位姿</span></article>
+          <article><b>运动实现</b><span>当前机器人与几何约束下的动作轨迹</span></article>
+        </div>
+      </section>
+
+      <section id="overview">
+        <span class="section-kicker">02 · Overview</span>
+        <h2>三种实现路线</h2>
+        <figure class="route-figure">
+          <img src="../../assets/figures/vla-skill-consistency-routes.png" alt="VLA Skill 一致性的三种实现路线：整轨迹自然语言、显式技能标签和自动发现潜在技能">
+          <figcaption>图 1｜三条路线分别回答“如何声明等价”“如何强制共享”和“是否能从数据中发现共享结构”。</figcaption>
+        </figure>
+      </section>
+
+      <section id="details">
+        <span class="section-kicker">03 · Route analysis</span>
+        <h2>三者不是同一层面的替代项</h2>
+        <div class="routes">
+          <article class="route language">
+            <span class="route-id">ROUTE A</span>
+            <h3>整轨迹自然语言</h3>
+            <p class="verdict">依靠语言空间表达任务等价，最接近主流 VLA 接口。</p>
+            <ul>
+              <li>开放词汇与可扩展性强</li>
+              <li>无需逐片段标注边界</li>
+              <li>同义表达和粒度差异会破坏一致性</li>
+              <li>长轨迹存在时间信用分配问题</li>
+            </ul>
+            <pre class="schema">canonical_skill: pick_up
+instruction: pick up the mug
+arguments:
+  source: table</pre>
+            <p class="fit">适合：短时域、开放词汇、多任务 VLA</p>
+          </article>
+          <article class="route explicit">
+            <span class="route-id">ROUTE B</span>
+            <h3>显式 Skill 标签</h3>
+            <p class="verdict">用共享 ID 直接规定跨场景等价，是当前研究问题最清晰的主基线。</p>
+            <ul>
+              <li>一致性强、可解释、可审计</li>
+              <li>便于技能路由和长任务组合</li>
+              <li>需要定义 taxonomy 与边界</li>
+              <li>过粗会混淆，过细会失去复用</li>
+            </ul>
+            <pre class="schema">skill: PICK_UP
+object: mug
+support: table
+postcondition:
+  object_in_gripper: true</pre>
+            <p class="fit">适合：论文主实验、层级策略、安全诊断</p>
+          </article>
+          <article class="route latent">
+            <span class="route-id">ROUTE C</span>
+            <h3>自动发现 Latent Skill</h3>
+            <p class="verdict">从轨迹或无动作视频中学习离散/连续 code，发现灵活但语义不受控。</p>
+            <ul>
+              <li>无需人工分段，可利用海量视频</li>
+              <li>可能发现未知运动原语</li>
+              <li>容易按场景、视角或本体聚类</li>
+              <li>重建好不代表语义一致</li>
+            </ul>
+            <pre class="schema">z = Encoder(o_t, o_t+Δ)
+policy:
+  a_t:t+H ~ π(o_t, z)
+audit_only:
+  skill_label: PICK_UP</pre>
+            <p class="fit">适合：无标签预训练、子技能发现、探索基线</p>
+          </article>
+        </div>
+        <div class="callout" style="margin-top:18px">
+          <span class="callout-mark">!</span>
+          <p><strong>Latent 的核心混淆：</strong>模型可能得到“所有地面场景 = z₁、所有桌面场景 = z₂”，而不是“所有拾取 = z₁、所有放置 = z₂”。因此必须用仅用于评估的人工标签审计 latent 表征。</p>
+        </div>
+
+        <div class="deep-dives">
+          <article class="deep-dive" id="language-detail">
+            <header class="deep-head language">
+              <span class="deep-letter">A</span>
+              <div><h3>整轨迹自然语言方案：让语言充当任务键</h3><p>每条完整示范由一句指令条件化；模型不接收独立的 skill ID，而是从语言嵌入中判断当前要执行什么行为。</p></div>
+            </header>
+            <div class="deep-body">
+              <div class="pipeline" aria-label="语言方案训练流程"><span>轨迹 τ</span><i>+</i><span>自然语言 ℓ</span><i>→</i><span>VLM / Text Encoder</span><i>→</i><span>Action Decoder</span><i>→</i><span>动作 â₁:T</span></div>
+              <div class="detail-grid">
+                <section class="detail-block"><h4><span>A1</span>监督信号</h4><p>训练样本是三元组 <code>(observation, instruction, action)</code>。同一个 <code>pick_up</code> 不以类别 ID 出现，而是隐含在 “pick up the block from the floor” 等句子中。</p><div class="formula">L_language = −Σₜ log πθ(aₜ | o≤t, ℓ)</div></section>
+                <section class="detail-block"><h4><span>A2</span>数据标注</h4><p>最简单是一条轨迹一句话。更可靠的做法是同时保存：</p><ul><li>原始人类指令；</li><li>规范化 canonical phrase；</li><li>结构化 object、source、goal 参数；</li><li>受控同义改写，避免记忆单一措辞。</li></ul></section>
+                <section class="detail-block"><h4><span>A3</span>模型接入</h4><p>语言经过预训练文本编码器或 VLM 得到 token，视觉和本体状态提供当前上下文，动作头输出单步动作或 action chunk。RT-1、Octo、OpenVLA 都属于这种任务条件范式，但动作头形式不同。</p></section>
+                <section class="detail-block"><h4><span>A4</span>如何强化一致性</h4><p>仅用行为克隆不会强制两条拾取轨迹拥有相同中间表示。可增加跨场景对比约束：</p><div class="formula">L = L_action + λc L_contrast(e_floor, e_table)</div><p>正样本是同 skill 不同 context；负样本是同 context 不同 skill。</p></section>
+                <section class="detail-block"><h4><span>A5</span>推理过程</h4><p>用户输入自然语言，模型在当前图像中绑定目标物体与空间关系，再直接生成动作。它不显式输出“现在调用 PICK_UP”，因此执行失败时较难判断是语言理解错、视觉 grounding 错，还是控制错。</p></section>
+                <section class="detail-block"><h4><span>A6</span>适用边界</h4><p>适合开放词汇与短时任务；对包含 <code>approach → grasp → lift → retract</code> 的长轨迹，单句标签不能提供阶段边界，通常需要 subtask 文本、进度变量或更细的时间标注。</p></section>
+              </div>
+              <div class="failure-list"><div><b>词面分裂</b><span>pick / grab / lift 被模型视作不同任务。</span></div><div><b>语义坍缩</b><span>统一写 pick_up 后丢失物体与空间约束。</span></div><div><b>时间模糊</b><span>整句无法指出抓取开始和结束时刻。</span></div></div>
+            </div>
+          </article>
+
+          <article class="deep-dive" id="explicit-detail">
+            <header class="deep-head explicit">
+              <span class="deep-letter">B</span>
+              <div><h3>显式 Skill 标签方案：把一致性写进监督</h3><p>人为定义有限技能词表，把地面拾取和桌面拾取都标为 <code>PICK_UP</code>，同时把几何差异留给上下文参数和低层控制器。</p></div>
+            </header>
+            <div class="deep-body">
+              <div class="pipeline" aria-label="显式标签方案训练流程"><span>图像 / 状态</span><i>→</i><span>Skill Predictor</span><i>→</i><span>PICK_UP + 参数</span><i>→</i><span>Low-level Policy</span><i>→</i><span>Action Chunk</span></div>
+              <div class="detail-grid">
+                <section class="detail-block"><h4><span>B1</span>监督信号</h4><p>除低层动作外，数据还提供每个轨迹片段的 skill 类别与边界。模型可联合预测技能和动作：</p><div class="formula">L = λs CE(ŝₜ, sₜ) + λa L_action(âₜ, aₜ)</div></section>
+                <section class="detail-block"><h4><span>B2</span>Skill 本体设计</h4><p>建议使用“动词技能 + 参数”，不要把每种场景都变成新类别：</p><ul><li><code>skill=PICK_UP</code></li><li><code>object=mug</code></li><li><code>support=table</code></li><li><code>grasp_mode=side</code></li><li>precondition / postcondition</li></ul></section>
+                <section class="detail-block"><h4><span>B3</span>粒度选择</h4><p>粗粒度可把整段行为标成 <code>PICK_UP</code>；中粒度可拆成 <code>APPROACH → GRASP → LIFT</code>。研究跨场景复用时，应先使用稳定、少量、可组合的粗粒度词表，再在 skill 内学习运动细节。</p></section>
+                <section class="detail-block"><h4><span>B4</span>模型结构</h4><p>可以是两个头共享主干：高层头预测 skill，低层头以 skill embedding 为条件生成动作；也可以用 skill 路由 Mixture-of-Experts。共享低层头更能检验是否真的形成跨场景复用。</p></section>
+                <section class="detail-block"><h4><span>B5</span>推理过程</h4><p>模型先根据任务与观测选出 <code>PICK_UP</code>，再由上下文条件控制器决定从地面还是桌面接近。显式中间变量允许记录 skill 选择置信度、切换时刻与失败阶段。</p></section>
+                <section class="detail-block"><h4><span>B6</span>边界与转移</h4><p>技能结束最好由后置条件或 learned termination head 判定，而不是固定时长。长任务还需约束合法转移，例如 <code>GRASP → LIFT</code>，避免标签正确但衔接状态不可执行。</p></section>
+              </div>
+              <div class="failure-list"><div><b>本体过粗</b><span>一个 PICK_UP 混入过多完全不同的控制模式。</span></div><div><b>本体过细</b><span>FLOOR_PICK 与 TABLE_PICK 再次割裂共享。</span></div><div><b>边界噪声</b><span>人工切分不一致造成 skill 切换抖动。</span></div></div>
+            </div>
+          </article>
+
+          <article class="deep-dive" id="latent-detail">
+            <header class="deep-head latent">
+              <span class="deep-letter">C</span>
+              <div><h3>自动发现 Latent Skill：先发现运动结构，再解释它</h3><p>训练阶段不提供 skill 标签，编码器从状态变化或轨迹片段中学习离散 code <code>zₖ</code>，策略再以该 code 为条件复现行为。</p></div>
+            </header>
+            <div class="deep-body">
+              <div class="pipeline" aria-label="Latent 方案训练流程"><span>帧对 / 轨迹片段</span><i>→</i><span>Inverse Encoder</span><i>→</i><span>VQ Code zₖ</span><i>→</i><span>Forward / Action Decoder</span><i>→</i><span>未来帧或动作</span></div>
+              <div class="detail-grid">
+                <section class="detail-block"><h4><span>C1</span>学习对象</h4><p>离散方案常用 VQ-VAE，把短时状态变化压缩为有限 code；连续方案使用 VAE 或轨迹编码器。LAPO 从无动作视频恢复 latent action，LAPA 再用少量带动作数据学习 latent-to-robot-action 映射。</p></section>
+                <section class="detail-block"><h4><span>C2</span>典型目标</h4><p>编码器应提取能解释未来变化、又不过度记忆像素的因素：</p><div class="formula">L = L_forward(oₜ,z,oₜ₊Δ) + L_inverse + L_VQ</div><p>若使用机器人动作，还可加入动作重建或行为克隆目标。</p></section>
+                <section class="detail-block"><h4><span>C3</span>两阶段训练</h4><ul><li>阶段 1：在大量机器人/人类视频上学习 latent action tokenizer；</li><li>阶段 2：学习语言和视觉到 latent code 的策略；</li><li>阶段 3：用少量带动作数据把 code 对齐到具体机器人控制空间。</li></ul></section>
+                <section class="detail-block"><h4><span>C4</span>Code 数量与时间窗</h4><p>码本太小会把 pick/place 等行为混在一起；太大则按物体、背景或轨迹细节碎片化。时间窗过短更像瞬时速度，过长又会混合多个技能。二者都必须作为消融变量。</p></section>
+                <section class="detail-block"><h4><span>C5</span>语义对齐</h4><p>纯 latent 不保证 code 可被语言调用。可在发现之后为 code 自动生成描述，或加入语言—latent 对比损失。加入语言监督后得到的是混合方案，需要与纯无监督版本分开报告。</p></section>
+                <section class="detail-block"><h4><span>C6</span>事后审计</h4><p>保留人工标签只用于评估：计算 NMI、ARI、purity 与 code utilization，并分别训练 <code>skill probe</code> 和 <code>context probe</code>。若 context probe 更强，说明 code 主要编码场景。</p></section>
+              </div>
+              <div class="failure-list"><div><b>场景聚类</b><span>背景和摄像机比操作语义更容易预测。</span></div><div><b>Code collapse</b><span>少数 latent code 吞掉大部分轨迹。</span></div><div><b>跨本体分裂</b><span>相同技能因机器人运动学不同被拆开。</span></div></div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="comparison">
+        <span class="section-kicker">04 · Decision matrix</span>
+        <h2>方案对比</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>维度</th><th>整轨迹语言</th><th>显式 Skill 标签</th><th>自动 Latent Skill</th></tr></thead>
+            <tbody>
+              <tr><td>一致性来源</td><td>语言语义相似性</td><td>人工定义的共享 ID</td><td>数据驱动聚类</td></tr>
+              <tr><td>跨场景共享确定性</td><td>中等</td><td><strong>最高</strong></td><td>不确定</td></tr>
+              <tr><td>开放词汇泛化</td><td><strong>高</strong></td><td>低—中</td><td>低，除非语言对齐</td></tr>
+              <tr><td>可解释性</td><td>高</td><td><strong>最高</strong></td><td>低</td></tr>
+              <tr><td>标注成本</td><td>中</td><td>高，分段时更高</td><td><strong>低</strong></td></tr>
+              <tr><td>技能边界</td><td>模糊</td><td>明确</td><td>自动但可能漂移</td></tr>
+              <tr><td>发现未知子技能</td><td>弱</td><td>无</td><td><strong>最强</strong></td></tr>
+              <tr><td>场景捷径风险</td><td>中</td><td>较低</td><td><strong>很高</strong></td></tr>
+              <tr><td>在本研究中的角色</td><td><span class="rank">2</span> 语义基线</td><td><span class="rank">1</span> 主方案/上界</td><td><span class="rank">3</span> 探索基线</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="experiment">
+        <span class="section-kicker">05 · Ablation plan</span>
+        <h2>公平的三组实验</h2>
+        <p>统一视觉、状态、动作空间、模型容量、训练步数和执行控制器，只替换 skill 表示与相应监督。</p>
+        <div class="experiment">
+          <article>
+            <span class="label">A · LANGUAGE</span>
+            <h3>语言监督梯度</h3>
+            <ul><li>A1 原始自由文本</li><li>A2 canonical phrase + 同义改写</li><li>A3 A2 + 跨场景对比损失</li></ul>
+          </article>
+          <article>
+            <span class="label">B · EXPLICIT</span>
+            <h3>显式层级梯度</h3>
+            <ul><li>B1 只有 Skill ID</li><li>B2 Skill ID + 参数</li><li>B3 Skill predictor + action decoder</li></ul>
+          </article>
+          <article>
+            <span class="label">C · LATENT</span>
+            <h3>无监督梯度</h3>
+            <ul><li>C1 纯轨迹重建</li><li>C2 逆/前向动力学</li><li>C3 Latent + 语言对齐（混合）</li></ul>
+          </article>
+        </div>
+        <div class="callout" style="margin-top:18px">
+          <span class="callout-mark">×</span>
+          <p><strong>关键负对照：</strong>同一场景中的 <code>pick_up</code> 与 <code>place</code>，以及不同场景中的同一 <code>pick_up</code>。数据必须平衡物体、背景、机器人、相机与轨迹长度，防止“地面总是方块、桌面总是杯子”这类伪相关。</p>
+        </div>
+      </section>
+
+      <section id="metrics">
+        <span class="section-kicker">06 · Metrics</span>
+        <h2>成功率之外，必须测表征</h2>
+        <div class="metrics">
+          <article class="metric"><span class="metric-no">M1</span><h3>跨场景成功率</h3><div class="equation">P(success | seen skill, unseen context)</div><p>例如训练桌面拾取，测试未见过的地面拾取。</p></article>
+          <article class="metric"><span class="metric-no">M2</span><h3>上下文一致性差距</h3><div class="equation">Δcontext = |SRfloor − SRtable|</div><p>在总体成功率相近时，差距越小越好。</p></article>
+          <article class="metric"><span class="metric-no">M3</span><h3>表征判别</h3><div class="equation">Sim(same skill, cross context)<br>&gt; Sim(different skill, same context)</div><p>避免只依赖 t-SNE；应报告成对相似度与线性 probe。</p></article>
+          <article class="metric"><span class="metric-no">M4</span><h3>Latent 审计</h3><div class="equation">NMI · ARI · Purity · Perplexity</div><p>额外比较 skill probe 和 context probe；后者更强意味着学到了场景捷径。</p></article>
+        </div>
+      </section>
+
+      <section id="recommendation" class="architecture">
+        <span class="section-kicker">07 · Recommended architecture</span>
+        <h2>推荐：三层混合，而非永久三选一</h2>
+        <p>让每种表示只承担它最擅长的职责：语言负责开放任务，显式 ID 稳定技能身份，latent 表达同一技能内部的运动多模态性。</p>
+        <div class="flow" aria-label="推荐架构流程">
+          <div class="flow-step"><b>语言任务</b>开放词汇指令</div><div class="flow-arrow">→</div>
+          <div class="flow-step"><b>Canonical Skill</b><code>PICK_UP</code></div><div class="flow-arrow">→</div>
+          <div class="flow-step"><b>结构化参数</b>object / support</div><div class="flow-arrow">→</div>
+          <div class="flow-step"><b>Latent Mode</b>top / side grasp</div><div class="flow-arrow">→</div>
+          <div class="flow-step"><b>Action Chunk</b>连续闭环控制</div>
+        </div>
+        <div class="loss">L = L_action + λs L_skill + λc L_cross-context + λz L_latent</div>
+      </section>
+
+      <section id="references">
+        <span class="section-kicker">08 · Evidence base</span>
+        <h2>代表文献</h2>
+        <ol class="refs">
+          <li><a href="https://robotics-transformer1.github.io/">RT-1: Robotics Transformer</a></li>
+          <li><a href="https://arxiv.org/abs/2202.02005">BC-Z: Zero-Shot Task Generalization</a></li>
+          <li><a href="https://robotics-transformer-x.github.io/">Open X-Embodiment / RT-X</a></li>
+          <li><a href="https://octo-models.github.io/">Octo: Generalist Robot Policy</a></li>
+          <li><a href="https://openvla.github.io/">OpenVLA</a></li>
+          <li><a href="https://arxiv.org/abs/2306.11886">SPRINT: Language Instruction Relabeling</a></li>
+          <li><a href="https://arxiv.org/abs/2308.09873">Skill Transformer</a></li>
+          <li><a href="https://openreview.net/forum?id=XZhipvOUBB">LISA: Interpretable Skill Abstractions</a></li>
+          <li><a href="https://openreview.net/forum?id=rvUq3cxpDF">LAPO: Learning to Act without Actions</a></li>
+          <li><a href="https://openreview.net/pdf?id=NCOP0KYb0u">LAPA: Latent Action Pretraining</a></li>
+        </ol>
+        <p style="color:var(--muted);font-size:.9rem">证据边界：上述工作分别证明语言条件、多技能监督或 latent action 学习的可行性；它们并未在完全相同的数据、模型与控制栈上直接比较本文提出的三种一致性方案，因此最终结论需要通过第 5 节的受控实验验证。</p>
+      </section>
+    </main>
+  </div>
+
+  <footer>My VLA Learning · Skill Consistency Research Note</footer>
+</body>
+</html>
